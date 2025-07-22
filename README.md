@@ -1,1 +1,1 @@
-# rmutl_fullProject
+# rmutl-fullProject
