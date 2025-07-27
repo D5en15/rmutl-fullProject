@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'login.dart'; // ✅ เพิ่ม import login
 
 class SettingScreen extends StatelessWidget {
   @override
@@ -27,7 +28,7 @@ class SettingScreen extends StatelessWidget {
                     child: Icon(Icons.person, size: 50, color: Colors.white),
                   ),
                   SizedBox(height: 10),
-                  Text("Jirapat", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text("Smith", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -45,8 +46,12 @@ class SettingScreen extends StatelessWidget {
     return InkWell(
       onTap: () {
         if (isLogout) {
-          // กลับไปหน้า Login
-          Navigator.popUntil(context, (route) => route.isFirst);
+          // ✅ นำทางไปหน้า Login แล้วล้าง Stack
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => LoginScreen()),
+            (route) => false,
+          );
         } else {
           // เพิ่มการนำทางไปยังหน้าที่ต้องการ
         }
