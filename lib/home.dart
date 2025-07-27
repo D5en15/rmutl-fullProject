@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import 'login.dart';
-// import 'choose.dart';
 import 'setting.dart';
-// import 'messagepage.dart';
-// import 'leaderboard.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -15,7 +11,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = [
     HomeContent(),
-    // MessageScreen(),
     SettingScreen(),
   ];
 
@@ -23,31 +18,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      // AppBar จะแสดงเฉพาะในหน้า Home
-      appBar: _currentIndex == 0
-          ? AppBar(
-              backgroundColor: const Color(0xFF3D5CFF),
-              title: const Text('Hi, Jirapat', style: TextStyle(fontWeight: FontWeight.bold)),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  onPressed: () {
-                    // นำทางไปยังหน้า Login
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => LoginScreen()),
-                    );
-                  },
-                ),
-              ],
-            )
-          : null, // ถ้าไม่ใช่หน้า Home ไม่แสดง AppBar
-
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
       ),
-
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
@@ -57,8 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          // BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Board'),
-          // BottomNavigationBarItem(icon: Icon(Icons.library_books), label: 'Course'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Setting'),
           BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Message'),
         ],
@@ -70,31 +42,90 @@ class _HomeScreenState extends State<HomeScreen> {
 class HomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
+    return Column(
       children: [
-        _buildProgressCard(),
-        const SizedBox(height: 20),
-        _buildSection("Career advice", [
-          _buildCard(Icons.work, 'View career', 'Look at careers that interest you.', 'Enter'),
-          _buildCard(Icons.poll, 'Survey', 'Take the survey to find the right career.', 'Log In'),
-        ]),
-        const SizedBox(height: 20),
-        _buildSection("Leader Board", [
-          _buildCard(Icons.emoji_events, 'Score ranking', 'Rank individual learning.', 'View'),
-        ]),
+        _buildHeader(context),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              Transform.translate(
+                offset: const Offset(0, -30),
+                child: _buildProgressCard(),
+              ),
+              const SizedBox(height: 10),
+              _buildSection("Career advice", [
+                _buildCard(Icons.work, 'View career', 'Look at careers that interest you.', 'Enter'),
+                const SizedBox(height: 12),
+                _buildCard(Icons.poll, 'Survey', 'Take the survey to find the right career.', 'Log In'),
+              ]),
+              const SizedBox(height: 20),
+              _buildSection("Leader Board", [
+                _buildCard(Icons.emoji_events, 'Score ranking', 'Rank individual learning.', 'View'),
+              ]),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildSection(String title, List<Widget> cards) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        Column(children: cards),
-      ],
+  /// ✅ Header พร้อมคลิกโปรไฟล์แล้วไปหน้า Setting
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
+      decoration: const BoxDecoration(
+        color: Color(0xFF3D5CFF),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Hi, Smith',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                SizedBox(height: 4),
+                Text("Let's start learning", style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+
+          // ✅ คลิกแล้วไปหน้า SettingScreen
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SettingScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(100),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.person, size: 30, color: Color(0xFF3D5CFF)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -109,12 +140,12 @@ class HomeContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Learned today', style: TextStyle(color: Colors.grey)),
+          const Text('Grade point average', style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text('30min / 60min', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('46min / 60min', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               Text('My learning', style: TextStyle(color: Color(0xFF3D5CFF))),
             ],
           ),
@@ -122,14 +153,25 @@ class HomeContent extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(5),
             child: const LinearProgressIndicator(
-              value: 30 / 60,
+              value: 46 / 60,
               backgroundColor: Colors.grey,
-              color: Colors.blueAccent,
+              color: Colors.orange,
               minHeight: 8,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSection(String title, List<Widget> cards) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        Column(children: cards),
+      ],
     );
   }
 
