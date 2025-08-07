@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
-                  if ((emailController.text == 'admin' && passwordController.text == '123456') ||
+                  if ((emailController.text == 'admin' && passwordController.text == '123456') || //กำหนดเงื่อนไขสำหรับการเข้าสู่ระบบ
                       emailController.text.isEmpty && passwordController.text.isEmpty) {
                     Navigator.pushReplacement(
                       context,

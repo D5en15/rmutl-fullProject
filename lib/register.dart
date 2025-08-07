@@ -16,6 +16,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool obscureConfirmPassword = true;
   bool isChecked = false;
 
+  final List<String> forbiddenUsernames = [
+    'admin',
+    'admin123456',
+    'adim',
+  ];
+
   @override
   void dispose() {
     usernameController.dispose();
@@ -25,28 +31,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  bool isValidEmail(String email) {
+    final emailRegex = RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$");
+    return emailRegex.hasMatch(email);
+  }
+
+  bool isStrongPassword(String password) {
+    final passwordRegex =
+        RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$');
+    return passwordRegex.hasMatch(password);
+  }
+
+  bool containsForbiddenWord(String input) {
+    final inputLower = input.toLowerCase();
+    return forbiddenUsernames.any((word) => inputLower.contains(word));
+  }
+
   void _onRegister() {
     String email = usernameController.text.trim();
     String password = passwordController.text;
     String confirmPassword = confirmPasswordController.text;
+    String fullName = nameController.text.trim();
 
-    if (email.isEmpty || nameController.text.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all fields")),
-      );
+    if (email.isEmpty || fullName.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      _showSnackBar("Please fill in all fields");
       return;
     }
 
-    if (!email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a valid email address")),
-      );
+    if (!isValidEmail(email)) {
+      _showSnackBar("Please enter a valid email address");
+      return;
+    }
+
+    if (containsForbiddenWord(email)) {
+      _showSnackBar("Email contains restricted words");
+      return;
+    }
+
+    if (containsForbiddenWord(fullName)) {
+      _showSnackBar("Full name contains restricted words");
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
+      _showSnackBar("Passwords do not match");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      _showSnackBar(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character.\nExample: MyP@ssw0rd!",
       );
       return;
     }
@@ -56,6 +90,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       MaterialPageRoute(
         builder: (context) => VerifyEmailScreen(email: email),
       ),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -78,7 +118,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               children: [
                 const Text(
                   'Sign Up',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E1E2D)),
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E1E2D),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -86,16 +130,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   style: TextStyle(fontSize: 14, color: Color(0xFFB4B4C6)),
                 ),
                 const SizedBox(height: 24),
-                _buildTextField(controller: usernameController, label: 'Email', hintText: 'example@email.com'),
+                _buildTextField(
+                  controller: usernameController,
+                  label: 'Email',
+                  hintText: 'example@email.com',
+                ),
                 const SizedBox(height: 16),
-                _buildTextField(controller: nameController, label: 'Full name', hintText: 'e.g. John Doe'),
+                _buildTextField(
+                  controller: nameController,
+                  label: 'Full name',
+                  hintText: 'e.g. John Doe',
+                ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: passwordController,
                   label: 'Password',
                   isPassword: true,
                   obscureText: obscurePassword,
-                  toggleObscure: () => setState(() => obscurePassword = !obscurePassword),
+                  toggleObscure: () =>
+                      setState(() => obscurePassword = !obscurePassword),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Use at least 8 characters with upper, lower case, number, and symbol.\nExample: MyP@ssw0rd!',
+                  style: TextStyle(fontSize: 12, color: Color(0xFFB4B4C6)),
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
@@ -103,7 +161,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   label: 'Confirm password',
                   isPassword: true,
                   obscureText: obscureConfirmPassword,
-                  toggleObscure: () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
+                  toggleObscure: () =>
+                      setState(() => obscureConfirmPassword = !obscureConfirmPassword),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -111,12 +170,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Checkbox(
                       value: isChecked,
-                      onChanged: (value) => setState(() => isChecked = value ?? false),
+                      onChanged: (value) =>
+                          setState(() => isChecked = value ?? false),
                       activeColor: const Color(0xFF3D5CFF),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4)),
                     ),
-                    Expanded(
-                      child: const Text(
+                    const Expanded(
+                      child: Text(
                         'By creating an account you agree to our terms & conditions.',
                         style: TextStyle(fontSize: 12, color: Color(0xFFB4B4C6)),
                       ),
@@ -132,11 +193,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF3D5CFF),
                       disabledBackgroundColor: Colors.grey.shade400,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     child: const Text(
                       'Create account',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -145,7 +212,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Already have an account? ', style: TextStyle(fontSize: 13)),
+                      const Text('Already have an account? ',
+                          style: TextStyle(fontSize: 13)),
                       GestureDetector(
                         onTap: () {
                           Navigator.pop(context); // กลับไปหน้า login
@@ -192,7 +260,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             hintStyle: const TextStyle(color: Color(0xFFB4B4C6)),
             filled: true,
             fillColor: const Color(0xFFF7F7FA),
-            contentPadding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
             suffixIcon: isPassword
                 ? IconButton(
                     icon: Icon(
