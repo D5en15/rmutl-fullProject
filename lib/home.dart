@@ -87,7 +87,7 @@ class HomeContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Text('Hi, Smith',
+                Text('Hi, Admin',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                 SizedBox(height: 4),
                 Text("Let's start learning", style: TextStyle(color: Colors.white)),

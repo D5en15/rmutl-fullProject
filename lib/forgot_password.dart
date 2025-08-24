@@ -78,9 +78,14 @@ class ForgotPasswordScreen extends StatelessWidget {
                           return;
                         }
 
-                        if (!email.contains('@')) {
+                        // ตรวจสอบว่าเป็น Gmail, Hotmail หรือ Outlook เท่านั้น
+                        final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@(gmail|hotmail|outlook)\.com$');
+
+                        if (!emailRegex.hasMatch(email)) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Invalid email format")),
+                            const SnackBar(
+                              content: Text("Please enter a valid Gmail, Hotmail, or Outlook address"),
+                            ),
                           );
                           return;
                         }
