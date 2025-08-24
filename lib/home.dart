@@ -10,8 +10,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    HomeContent(),
-    SettingScreen(),
+    HomeContent(),        
+    SettingScreen(name: "John Smith", role: "User"),  // ✅ ส่งค่า name & role
+    MessageScreen(),      
   ];
 
   @override
@@ -55,13 +56,16 @@ class HomeContent extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               _buildSection("Career advice", [
-                _buildCard(Icons.work, 'View career', 'Look at careers that interest you.', 'Enter'),
+                _buildCard(Icons.work, 'View career',
+                    'Look at careers that interest you.', 'Enter'),
                 const SizedBox(height: 12),
-                _buildCard(Icons.poll, 'Survey', 'Take the survey to find the right career.', 'Log In'),
+                _buildCard(Icons.poll, 'Survey',
+                    'Take the survey to find the right career.', 'Log In'),
               ]),
               const SizedBox(height: 20),
               _buildSection("Leader Board", [
-                _buildCard(Icons.emoji_events, 'Score ranking', 'Rank individual learning.', 'View'),
+                _buildCard(Icons.emoji_events, 'Score ranking',
+                    'Rank individual learning.', 'View'),
               ]),
             ],
           ),
@@ -70,7 +74,7 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  /// ✅ Header พร้อมคลิกโปรไฟล์แล้วไปหน้า Setting
+  /// ✅ Header พร้อมคลิกโปรไฟล์แล้วไป SettingScreen(name, role)
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
@@ -87,20 +91,27 @@ class HomeContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Text('Hi, Admin',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text('Hi, Smith',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
                 SizedBox(height: 4),
-                Text("Let's start learning", style: TextStyle(color: Colors.white)),
+                Text("Let's start learning",
+                    style: TextStyle(color: Colors.white)),
               ],
             ),
           ),
 
-          // ✅ คลิกแล้วไปหน้า SettingScreen
+          // ✅ กดแล้วไปหน้า SettingScreen พร้อมส่ง name, role
           InkWell(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => SettingScreen()),
+                MaterialPageRoute(
+                  builder: (context) =>
+                      SettingScreen(name: "Smith", role: "User"),
+                ),
               );
             },
             borderRadius: BorderRadius.circular(100),
@@ -120,7 +131,8 @@ class HomeContent extends StatelessWidget {
               child: const CircleAvatar(
                 radius: 24,
                 backgroundColor: Colors.white,
-                child: Icon(Icons.person, size: 30, color: Color(0xFF3D5CFF)),
+                child:
+                    Icon(Icons.person, size: 30, color: Color(0xFF3D5CFF)),
               ),
             ),
           ),
@@ -135,18 +147,27 @@ class HomeContent extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), spreadRadius: 2, blurRadius: 5)],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              spreadRadius: 2,
+              blurRadius: 5)
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Grade point average', style: TextStyle(color: Colors.grey)),
+          const Text('Grade point average',
+              style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text('46min / 60min', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              Text('My learning', style: TextStyle(color: Color(0xFF3D5CFF))),
+              Text('46min / 60min',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 18)),
+              Text('My learning',
+                  style: TextStyle(color: Color(0xFF3D5CFF))),
             ],
           ),
           const SizedBox(height: 10),
@@ -168,16 +189,20 @@ class HomeContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
         Column(children: cards),
       ],
     );
   }
 
-  Widget _buildCard(IconData icon, String title, String subtitle, String buttonText) {
+  Widget _buildCard(
+      IconData icon, String title, String subtitle, String buttonText) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Row(
@@ -188,9 +213,12 @@ class HomeContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
-                  Text(subtitle, style: const TextStyle(color: Colors.grey)),
+                  Text(subtitle,
+                      style: const TextStyle(color: Colors.grey)),
                 ],
               ),
             ),
@@ -198,13 +226,26 @@ class HomeContent extends StatelessWidget {
               onPressed: () {},
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3D5CFF),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
-              child: Text(buttonText, style: const TextStyle(color: Colors.white)),
+              child: Text(buttonText,
+                  style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// ✅ เพิ่มหน้า Message (mock UI)
+class MessageScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text("📩 Messages for User",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     );
   }
 }
