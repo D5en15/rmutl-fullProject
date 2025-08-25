@@ -10,9 +10,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    HomeContent(),        
-    SettingScreen(name: "John Smith", role: "User"),  // ✅ ส่งค่า name & role
-    MessageScreen(),      
+    HomeContent(),
+    SettingScreen(name: "John Smith", role: "User"), 
+    MessageScreen(),
   ];
 
   @override
@@ -52,20 +52,24 @@ class HomeContent extends StatelessWidget {
             children: [
               Transform.translate(
                 offset: const Offset(0, -30),
-                child: _buildProgressCard(),
+                child: _buildGpaCard(),
               ),
               const SizedBox(height: 10),
-              _buildSection("Career advice", [
-                _buildCard(Icons.work, 'View career',
-                    'Look at careers that interest you.', 'Enter'),
-                const SizedBox(height: 12),
-                _buildCard(Icons.poll, 'Survey',
-                    'Take the survey to find the right career.', 'Log In'),
+
+              /// Transcript Section
+              _buildSection("Transcript", [
+                _buildCard(Icons.school, 'View Grades',
+                    'Check your grades for each semester.', 'Open'),
               ]),
               const SizedBox(height: 20),
-              _buildSection("Leader Board", [
-                _buildCard(Icons.emoji_events, 'Score ranking',
-                    'Rank individual learning.', 'View'),
+
+              /// Statistics Section
+              _buildSection("Statistics", [
+                _buildCard(Icons.bar_chart, 'GPA Trend',
+                    'View GPA progress across semesters.', 'View'),
+                const SizedBox(height: 12),
+                _buildCard(Icons.pie_chart, 'Grade Distribution',
+                    'See proportion of A, B, C, etc.', 'Analyze'),
               ]),
             ],
           ),
@@ -74,7 +78,7 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  /// ✅ Header พร้อมคลิกโปรไฟล์แล้วไป SettingScreen(name, role)
+  /// Header with Profile
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
@@ -97,13 +101,11 @@ class HomeContent extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
                 SizedBox(height: 4),
-                Text("Let's start learning",
+                Text("Check your GPA & grades",
                     style: TextStyle(color: Colors.white)),
               ],
             ),
           ),
-
-          // ✅ กดแล้วไปหน้า SettingScreen พร้อมส่ง name, role
           InkWell(
             onTap: () {
               Navigator.push(
@@ -141,7 +143,9 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressCard() {
+  /// GPA Summary Card
+  Widget _buildGpaCard() {
+    double gpa = 3.45; // mock data
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -157,25 +161,25 @@ class HomeContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Grade point average',
-              style: TextStyle(color: Colors.grey)),
+          const Text('Current GPA',
+              style: TextStyle(color: Colors.grey, fontSize: 14)),
           const SizedBox(height: 5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('46min / 60min',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18)),
-              Text('My learning',
+            children: [
+              Text(gpa.toStringAsFixed(2),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 22)),
+              const Text('Semester 2/2024',
                   style: TextStyle(color: Color(0xFF3D5CFF))),
             ],
           ),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: const LinearProgressIndicator(
-              value: 46 / 60,
-              backgroundColor: Colors.grey,
+            child: LinearProgressIndicator(
+              value: gpa / 4.0, // normalize to 4.0 scale
+              backgroundColor: Colors.grey[300],
               color: Colors.orange,
               minHeight: 8,
             ),
@@ -239,7 +243,7 @@ class HomeContent extends StatelessWidget {
   }
 }
 
-/// ✅ เพิ่มหน้า Message (mock UI)
+/// Message Screen
 class MessageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
