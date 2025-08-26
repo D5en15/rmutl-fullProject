@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
-import 'login.dart'; 
+import 'app_router.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
+      title: 'RMUTL Project',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
       ),
-      home: LoginScreen(), // หน้าแรกเป็น Login
+      routerConfig: AppRouter.router,
     );
   }
 }
