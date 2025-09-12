@@ -8,9 +8,12 @@ import 'ui/auth/forgot_password_page.dart';
 
 // ---------- COMMON ----------
 import 'ui/common/profile_page.dart';
-import 'ui/common/notification_page.dart';
+import 'ui/common/notification_page.dart'; // NotificationPage
 import 'ui/common/settings_page.dart';
 import 'ui/common/role_shell.dart';
+// + ใหม่
+import 'ui/common/messages_page.dart'; // MessagesPage
+import 'ui/common/chat_page.dart';      // ChatPage(threadId)
 
 // ---------- STUDENT ----------
 import 'ui/student/home_page.dart' as s;
@@ -38,24 +41,20 @@ import 'ui/forum/create_post_page.dart';
 
 class AppRouter {
   static final _rootKey = GlobalKey<NavigatorState>();
-  static final _studentShellKey = GlobalKey<NavigatorState>(
-    debugLabel: 'studentShell',
-  );
-  static final _teacherShellKey = GlobalKey<NavigatorState>(
-    debugLabel: 'teacherShell',
-  );
-  static final _adminShellKey = GlobalKey<NavigatorState>(
-    debugLabel: 'adminShell',
-  );
+  static final _studentShellKey =
+      GlobalKey<NavigatorState>(debugLabel: 'studentShell');
+  static final _teacherShellKey =
+      GlobalKey<NavigatorState>(debugLabel: 'teacherShell');
+  static final _adminShellKey =
+      GlobalKey<NavigatorState>(debugLabel: 'adminShell');
 
   static final router = GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/login',
-    errorBuilder:
-        (context, state) => Scaffold(
-          appBar: AppBar(title: const Text('404')),
-          body: Center(child: Text('404 • Page not found: ${state.uri}')),
-        ),
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('404')),
+      body: Center(child: Text('404 • Page not found: ${state.uri}')),
+    ),
     routes: [
       // ---------- AUTH ----------
       GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
@@ -64,17 +63,27 @@ class AppRouter {
 
       // ---------- COMMON (เข้าจากที่ใดก็ได้) ----------
       GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
+      GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
       GoRoute(
         path: '/notifications',
         builder: (_, __) => const NotificationPage(),
       ),
-      GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+      // กล่องข้อความรวม (เข้าจากแท็บ message)
+      GoRoute(
+        path: '/student/messages',
+        builder: (_, __) => const MessagesPage(),
+      ),
+      // ห้องแชท (ซ่อนไม่ให้มี BottomNav โดยวางนอก ShellRoute)
+      GoRoute(
+        path: '/chat/:id',
+        builder: (_, s) => ChatPage(threadId: s.pathParameters['id']!),
+      ),
 
       // ================= STUDENT (BottomNav: Home • Career • Board • Setting) =================
       ShellRoute(
         navigatorKey: _studentShellKey,
-        builder:
-            (context, state, child) => RoleShell(role: 'student', child: child),
+        builder: (context, state, child) =>
+            RoleShell(role: 'student', child: child),
         routes: [
           GoRoute(
             path: '/student',
@@ -102,9 +111,8 @@ class AppRouter {
               ),
               GoRoute(
                 path: ':postId',
-                builder:
-                    (_, s) =>
-                        PostDetailPage(postId: s.pathParameters['postId']!),
+                builder: (_, s) =>
+                    PostDetailPage(postId: s.pathParameters['postId']!),
               ),
             ],
           ),
@@ -126,8 +134,8 @@ class AppRouter {
       // ================= TEACHER (BottomNav: Home • Board • Setting) =================
       ShellRoute(
         navigatorKey: _teacherShellKey,
-        builder:
-            (context, state, child) => RoleShell(role: 'teacher', child: child),
+        builder: (context, state, child) =>
+            RoleShell(role: 'teacher', child: child),
         routes: [
           GoRoute(
             path: '/teacher',
@@ -139,9 +147,8 @@ class AppRouter {
               ),
               GoRoute(
                 path: 'students/:id',
-                builder:
-                    (_, s) =>
-                        StudentDetailPage(studentId: s.pathParameters['id']!),
+                builder: (_, s) =>
+                    StudentDetailPage(studentId: s.pathParameters['id']!),
               ),
               GoRoute(
                 path: 'feedback',
@@ -159,9 +166,8 @@ class AppRouter {
               ),
               GoRoute(
                 path: ':postId',
-                builder:
-                    (_, s) =>
-                        PostDetailPage(postId: s.pathParameters['postId']!),
+                builder: (_, s) =>
+                    PostDetailPage(postId: s.pathParameters['postId']!),
               ),
             ],
           ),
@@ -183,21 +189,15 @@ class AppRouter {
       // ================= ADMIN (BottomNav: Home • Users • CareerCfg • Moderation) =================
       ShellRoute(
         navigatorKey: _adminShellKey,
-        builder:
-            (context, state, child) => RoleShell(role: 'admin', child: child),
+        builder: (context, state, child) =>
+            RoleShell(role: 'admin', child: child),
         routes: [
           GoRoute(
             path: '/admin',
             builder: (_, __) => const a.AdminHomePage(),
             routes: [
-              GoRoute(
-                path: 'users',
-                builder: (_, __) => const UserManagePage(),
-              ),
-              GoRoute(
-                path: 'roles',
-                builder: (_, __) => const RolePermissionPage(),
-              ),
+              GoRoute(path: 'users', builder: (_, __) => const UserManagePage()),
+              GoRoute(path: 'roles', builder: (_, __) => const RolePermissionPage()),
               GoRoute(
                 path: 'career-config',
                 builder: (_, __) => const CareerConfigPage(),
@@ -208,10 +208,7 @@ class AppRouter {
               ),
             ],
           ),
-          GoRoute(
-            path: '/admin/users',
-            builder: (_, __) => const UserManagePage(),
-          ),
+          GoRoute(path: '/admin/users', builder: (_, __) => const UserManagePage()),
           GoRoute(
             path: '/admin/career-config',
             builder: (_, __) => const CareerConfigPage(),
@@ -224,26 +221,16 @@ class AppRouter {
             path: '/admin/forum',
             builder: (_, __) => const ForumListPage(),
             routes: [
-              GoRoute(
-                path: 'create',
-                builder: (_, __) => const CreatePostPage(),
-              ),
+              GoRoute(path: 'create', builder: (_, __) => const CreatePostPage()),
               GoRoute(
                 path: ':postId',
-                builder:
-                    (_, s) =>
-                        PostDetailPage(postId: s.pathParameters['postId']!),
+                builder: (_, s) =>
+                    PostDetailPage(postId: s.pathParameters['postId']!),
               ),
             ],
           ),
-          GoRoute(
-            path: '/admin/settings',
-            builder: (_, __) => const SettingsPage(),
-          ),
-          GoRoute(
-            path: '/admin/profile',
-            builder: (_, __) => const ProfilePage(),
-          ),
+          GoRoute(path: '/admin/settings', builder: (_, __) => const SettingsPage()),
+          GoRoute(path: '/admin/profile', builder: (_, __) => const ProfilePage()),
           GoRoute(
             path: '/admin/notifications',
             builder: (_, __) => const NotificationPage(),
@@ -259,8 +246,8 @@ class AppRouter {
           GoRoute(path: 'create', builder: (_, __) => const CreatePostPage()),
           GoRoute(
             path: ':postId',
-            builder:
-                (_, s) => PostDetailPage(postId: s.pathParameters['postId']!),
+            builder: (_, s) =>
+                PostDetailPage(postId: s.pathParameters['postId']!),
           ),
         ],
       ),
