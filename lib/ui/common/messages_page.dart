@@ -7,8 +7,24 @@ class MessagesPage extends StatelessWidget {
   static const _muted = Color(0xFF858597);
   static const _primary = Color(0xFF3D5CFF);
 
+  String _detectRole(BuildContext context) {
+    final uri = GoRouterState.of(context).uri.toString();
+    if (uri.startsWith('/teacher')) return 'teacher';
+    if (uri.startsWith('/admin'))   return 'admin';
+    return 'student';
+  }
+
+  String _baseOf(String role) => switch (role) {
+        'teacher' => '/teacher',
+        'admin'   => '/admin',
+        _         => '/student',
+      };
+
   @override
   Widget build(BuildContext context) {
+    final role = _detectRole(context);
+    final base = _baseOf(role);
+
     final threads = List.generate(
       8,
       (i) => _ThreadTileData(
@@ -18,65 +34,88 @@ class MessagesPage extends StatelessWidget {
         time: i.isEven ? '04:32 pm' : '12:00 am',
         lastMessage:
             'Congratulations on completing the first lesson, keep up the good work!',
-        hasPreviewBox: i.isEven, // card preview (กล่องชมพูในดีไซน์)
+        hasPreviewBox: i.isEven,
       ),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // AppBar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    onPressed: () => context.pop(),
-                  ),
-                  const SizedBox(width: 4),
-                  const Text('Notifications',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                ],
-              ),
-            ),
-            // Tabs
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _TabButton(
-                    text: 'notification',
-                    isActive: false,
-                    onTap: () => context.go('/student/notifications'),
-                  ),
-                  const SizedBox(width: 18),
-                  _TabButton(
-                    text: 'message',
-                    isActive: true,
-                    trailingDot: true,
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                itemCount: threads.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _ThreadTile(
-                  data: threads[i],
-                  onTap: () => context.go('/chat/${threads[i].id}'),
+    return WillPopScope(
+      // ถ้ากด back ของระบบ แต่สแต็กว่าง ให้พาไป Notifications
+      onWillPop: () async {
+        if (Navigator.of(context).canPop()) return true;
+        context.go('$base/notifications');
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ---------- Header ----------
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      onPressed: () {
+                        if (Navigator.of(context).canPop()) {
+                          context.pop(); // กลับไป Notifications (ที่ push มา)
+                        } else {
+                          context.go('$base/notifications'); // fallback
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Notifications',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+
+              // ---------- Tabs ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    _TabButton(
+                      text: 'notification',
+                      isActive: false,
+                      onTap: () {
+                        if (Navigator.of(context).canPop()) {
+                          context.pop(); // กลับแท็บ notification ในสแต็กเดิม
+                        } else {
+                          context.push('$base/notifications'); // fallback
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 18),
+                    _TabButton(
+                      text: 'message',
+                      isActive: true,
+                      trailingDot: true,
+                      onTap: () {}, // อยู่หน้า message แล้ว
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ---------- List ----------
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  itemCount: threads.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => _ThreadTile(
+                    data: threads[i],
+                    onTap: () => context.push('/chat/${threads[i].id}'),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -109,14 +148,14 @@ class _TabButton extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text(text,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    )),
+                Text(
+                  text,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                ),
                 if (trailingDot) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -187,7 +226,6 @@ class _ThreadTile extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // หัวแถว: avatar name status time
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -206,22 +244,29 @@ class _ThreadTile extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Text(data.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800)),
+                            Text(
+                              data.name,
+                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
                             const SizedBox(width: 8),
-                            Text(data.online ? 'Online' : 'Offline',
-                                style: TextStyle(
-                                  color: data.online
-                                      ? const Color(0xFF00B894)
-                                      : const Color(0xFF9CA3AF),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                )),
+                            Text(
+                              data.online ? 'Online' : 'Offline',
+                              style: TextStyle(
+                                color: data.online
+                                    ? const Color(0xFF00B894)
+                                    : const Color(0xFF9CA3AF),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
                             const Spacer(),
-                            Text(data.time,
-                                style: const TextStyle(
-                                    color: Color(0xFF9CA3AF), fontSize: 12)),
+                            Text(
+                              data.time,
+                              style: const TextStyle(
+                                color: Color(0xFF9CA3AF),
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),

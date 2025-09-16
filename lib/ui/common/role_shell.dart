@@ -10,14 +10,15 @@ class RoleShell extends StatelessWidget {
 
   // Theme token
   static const _primary = Color(0xFF3D5CFF);
-  static const _muted = Color(0xFF858597);
-  static const _bgSoft = Color(0xFFF6F7FF);
+  static const _muted   = Color(0xFF858597);
+  static const _bgSoft  = Color(0xFFF6F7FF);
 
   @override
   Widget build(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
 
-    // เมนูต่อบทบาท
+    // เมนูต่อบทบาท — (Admin) เพิ่ม alias ให้ Config รองรับทั้ง /admin/config
+    // และ /admin/career-config รวมถึงทุกเส้นทางย่อยใต้ /admin/config/*
     final List<_NavItem> items = switch (role) {
       'student' => const [
         _NavItem('Home', Icons.home_outlined, '/student'),
@@ -31,46 +32,64 @@ class RoleShell extends StatelessWidget {
         _NavItem('Setting', Icons.settings_outlined, '/teacher/settings'),
       ],
       _ => const [
-        // admin
         _NavItem('Home', Icons.home_outlined, '/admin'),
-        _NavItem('Config', Icons.track_changes_outlined, '/admin/career-config'),
+        _NavItem(
+          'Config',
+          Icons.track_changes_outlined,
+          '/admin/config',
+          // เพิ่ม alias สำคัญสำหรับ resolve index ให้แท็บยังคงเลือกที่ Config
+          aliases: [
+            '/admin/career-config',  // alias เก่า
+            '/admin/config/subjects',
+            '/admin/config/skills',
+          ],
+        ),
         _NavItem('Community', Icons.forum_outlined, '/admin/forum'),
         _NavItem('Setting', Icons.settings_outlined, '/admin/settings'),
       ],
     };
 
-    int currentIndex = 0;
-    for (var i = 0; i < items.length; i++) {
-      if (uri == items[i].path || uri.startsWith('${items[i].path}/')) {
-        currentIndex = i;
-        break;
-      }
-    }
+    final currentIndex = _resolveIndex(uri, items);
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 6, left: 8, right: 8),
-        child: switch (role) {
-          'teacher' => _FlatNavBar(
-              items: items,
-              currentIndex: currentIndex,
-              onTap: (i) {
-                final target = items[i].path;
-                if (uri != target) context.go(target);
-              },
-            ),
-          _ => _PillNavBar(
-              items: items,
-              currentIndex: currentIndex,
-              onTap: (i) {
-                final target = items[i].path;
-                if (uri != target) context.go(target);
-              },
-            ),
-        },
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 6, left: 8, right: 8),
+          child: switch (role) {
+            'teacher' => _FlatNavBar(
+                items: items,
+                currentIndex: currentIndex,
+                onTap: (i) => _goIfChanged(context, uri, items[i].path),
+              ),
+            _ => _PillNavBar(
+                items: items,
+                currentIndex: currentIndex,
+                onTap: (i) => _goIfChanged(context, uri, items[i].path),
+              ),
+          },
+        ),
       ),
     );
+  }
+
+  /// หาดัชนีเมนูจาก URI ปัจจุบัน (รองรับ aliases และเส้นทางย่อย)
+  static int _resolveIndex(String uri, List<_NavItem> items) {
+    for (var i = 0; i < items.length; i++) {
+      final paths = [items[i].path, ...items[i].aliases];
+      for (final p in paths) {
+        if (uri == p || uri.startsWith('$p/')) return i;
+      }
+      // กรณีพิเศษ: ถ้า path หลักมีลูกย่อยจำนวนมาก เช่น '/admin/config/...'
+      // การเช็ค startsWith ที่ path หลักเพียงตัวเดียวก็เพียงพอแล้ว
+      if (uri.startsWith('${items[i].path}/')) return i;
+    }
+    return 0;
+  }
+
+  static void _goIfChanged(BuildContext context, String currentUri, String target) {
+    if (currentUri != target) context.go(target);
   }
 }
 
@@ -81,8 +100,11 @@ class _PillNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
-  const _PillNavBar(
-      {required this.items, required this.currentIndex, required this.onTap});
+  const _PillNavBar({
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -92,8 +114,7 @@ class _PillNavBar extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: const [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       child: Row(
@@ -123,7 +144,7 @@ class _PillItem extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _primary = RoleShell._primary;
-  static const _muted = RoleShell._muted;
+  static const _muted   = RoleShell._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -164,8 +185,11 @@ class _FlatNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
-  const _FlatNavBar(
-      {required this.items, required this.currentIndex, required this.onTap});
+  const _FlatNavBar({
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +223,7 @@ class _FlatItem extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _primary = RoleShell._primary;
-  static const _muted = RoleShell._muted;
+  static const _muted   = RoleShell._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -230,11 +254,12 @@ class _FlatItem extends StatelessWidget {
 }
 
 /// ----------------------------------------------------------------------
-/// 📦 Item model
+/// 📦 Item model (รองรับ aliases)
 /// ----------------------------------------------------------------------
 class _NavItem {
   final String label;
   final IconData icon;
   final String path;
-  const _NavItem(this.label, this.icon, this.path);
+  final List<String> aliases;
+  const _NavItem(this.label, this.icon, this.path, {this.aliases = const []});
 }
