@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -10,9 +12,12 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController passwordController =
+      TextEditingController();
   bool obscurePassword = true;
   bool loading = false;
+
+  final bool navigateAfterLogin = true;
 
   @override
   void dispose() {
@@ -21,34 +26,68 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _login() async {
-    final username = emailController.text.trim();
-    final password = passwordController.text.trim();
+  Future<void> _login() async {
+    final email = emailController.text.trim();
+    final password = passwordController.text;
 
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill username & password')),
-      );
+    if (email.isEmpty || password.isEmpty) {
+      _toast('กรอกอีเมลและรหัสผ่าน');
       return;
     }
 
     setState(() => loading = true);
-    await Future.delayed(const Duration(milliseconds: 300)); // mock delay
-    setState(() => loading = false);
+    try {
+      debugPrint('🔐 signIn: $email');
+      final cred = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
 
-    if (!mounted) return;
+      final uid = cred.user!.uid;
+      debugPrint('✅ Auth OK uid=$uid');
 
-    if (username == "admin" && password == "123456") {
-      context.go('/admin');
-    } else if (username == "teacher" && password == "123456") {
-      context.go('/teacher');
-    } else if (username == "user" && password == "123456") {
-      context.go('/student');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid username or password")),
-      );
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (!doc.exists) {
+        _toast('Firestore: ไม่พบ users/$uid (สร้าง doc ตาม UID และใส่ role)');
+        return;
+      }
+
+      final role = (doc.data()?['role'] as String?)?.toLowerCase();
+      if (role == null || role.isEmpty) {
+        _toast('Firestore: users/$uid ไม่มี field "role"');
+        return;
+      }
+
+      _toast('เข้าสู่ระบบสำเร็จ (role=$role)');
+
+      if (!mounted || !navigateAfterLogin) return;
+
+      switch (role) {
+        case 'admin':
+          context.go('/admin');
+          break;
+        case 'teacher':
+          context.go('/teacher');
+          break;
+        default:
+          context.go('/student');
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Auth: code=${e.code}, msg=${e.message}');
+      _toast('Auth error: ${e.code} ${e.message ?? ""}');
+    } on FirebaseException catch (e) {
+      debugPrint('❌ Firestore: code=${e.code}, msg=${e.message}');
+      _toast('Firestore error: ${e.code} ${e.message ?? ""}');
+    } catch (e) {
+      debugPrint('❌ Unknown: $e');
+      _toast('Error: $e');
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   InputDecoration _dec({bool isPassword = false}) {
@@ -59,17 +98,16 @@ class _LoginPageState extends State<LoginPage> {
         borderSide: BorderSide(color: Color(0xFF3D5CFF)),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      suffixIcon:
-          isPassword
-              ? IconButton(
-                tooltip: obscurePassword ? 'Show' : 'Hide',
-                icon: Icon(
-                  obscurePassword ? Icons.visibility_off : Icons.visibility,
-                ),
-                onPressed:
-                    () => setState(() => obscurePassword = !obscurePassword),
-              )
-              : null,
+      suffixIcon: isPassword
+          ? IconButton(
+              tooltip: obscurePassword ? 'Show' : 'Hide',
+              icon: Icon(
+                obscurePassword ? Icons.visibility_off : Icons.visibility,
+              ),
+              onPressed: () =>
+                  setState(() => obscurePassword = !obscurePassword),
+            )
+          : null,
     );
   }
 
@@ -84,7 +122,6 @@ class _LoginPageState extends State<LoginPage> {
         child: AppBar(
           backgroundColor: const Color.fromARGB(255, 230, 230, 230),
           elevation: 0,
-          leading: null,
           flexibleSpace: const Align(
             alignment: Alignment.bottomLeft,
             child: Padding(
@@ -111,20 +148,19 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 const SizedBox(height: 24),
 
-                // Username
                 const Text(
-                  "Username",
+                  "Email",
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: emailController,
                   textInputAction: TextInputAction.next,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: _dec(),
                 ),
                 const SizedBox(height: 20),
 
-                // Password
                 const Text(
                   "Password",
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
@@ -139,22 +175,21 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 12),
 
+                // 👉 ปุ่ม Forgot password → ไปหน้า /forgot
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () => context.push('/forgot'),
                     child: const Text(
-                      'Forget password?',
+                      'Forgot password?',
                       style: TextStyle(
                         color: Color.fromARGB(255, 180, 180, 180),
                       ),
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 16),
 
-                // ปุ่ม Log In
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -166,29 +201,27 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child:
-                        loading
-                            ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : const Text(
-                              'Log In',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                              ),
+                    child: loading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
                             ),
+                          )
+                        : const Text(
+                            'Log In',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // Sign up row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -198,9 +231,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: const Text(
                         'Sign up',
                         style: TextStyle(
-                          color: Color(
-                            0xFF3D5CFF,
-                          ), // ✅ สีน้ำเงินเหมือนปุ่ม login
+                          color: Color(0xFF3D5CFF),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -210,7 +241,6 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 12),
 
-                // Divider "Or login with"
                 Row(
                   children: [
                     const Expanded(child: Divider()),
@@ -227,30 +257,17 @@ class _LoginPageState extends State<LoginPage> {
                     const Expanded(child: Divider()),
                   ],
                 ),
-                const SizedBox(height: 14),
-
-                // Google only (❌ ไม่เต็มความกว้าง)
+                const SizedBox(height: 12),
                 Center(
                   child: OutlinedButton.icon(
-                    onPressed: () {}, // mock
-                    icon: Image.network(
-                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                      width: 20,
-                      height: 20,
-                      errorBuilder:
-                          (_, __, ___) => const Icon(
-                            Icons.g_mobiledata_rounded,
-                            color: Color(0xFF3D5CFF),
-                          ),
-                    ),
+                    onPressed: null,
+                    icon: const Icon(Icons.g_mobiledata_rounded),
                     label: const Text(
                       'Continue with Google',
                       style: TextStyle(color: Color(0xFF3D5CFF)),
                     ),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                        color: Color(0xFF3D5CFF), // ✅ ขอบน้ำเงิน
-                      ),
+                      side: const BorderSide(color: Color(0xFF3D5CFF)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -261,8 +278,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 24),
               ],
             ),
           ),

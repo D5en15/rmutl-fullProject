@@ -1,64 +1,136 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-// ใช้ EditProfileInitial จากหน้า edit_profile_page.dart
 import 'edit_profile_page.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
-  // THEME TOKENS (เฉพาะหน้านี้)
   static const _primary = Color(0xFF3D5CFF);
-  static const _muted   = Color(0xFF858597);
+  static const _muted = Color(0xFF858597);
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  String? _name;
+  String? _email;
+  String? _role;
+  String? _username;
+  String? _avatar; // ✅ เก็บ path avatar
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final data = doc.data();
+    if (data == null) return;
+
+    setState(() {
+      _name = data['displayName'];
+      _email = data['email'];
+      _role = data['role'];
+      _username = data['username'];
+      _avatar = data['avatar']; // ✅ ดึง avatar จาก Firestore
+    });
+  }
 
   void _logout(BuildContext context) {
-    // TODO: เคลียร์ state/session ที่ใช้งานจริงก่อน
+    FirebaseAuth.instance.signOut();
     context.go('/login');
   }
 
-  /// เดา role จากเส้นทางปัจจุบัน
-  String _detectRole(BuildContext context) {
-    final uri = GoRouterState.of(context).uri.toString();
-    if (uri.startsWith('/teacher')) return 'teacher';
-    if (uri.startsWith('/admin')) return 'admin';
-    return 'student';
+  void _showResetDialog(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = user?.email;
+    if (email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ไม่พบอีเมลผู้ใช้")),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "ยืนยันการเปลี่ยนรหัสผ่าน",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "คุณต้องการส่งลิงก์เปลี่ยนรหัสผ่านไปยัง\n$email ใช่หรือไม่?",
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SettingsPage._primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    try {
+                      await FirebaseAuth.instance
+                          .sendPasswordResetEmail(email: email);
+                      if (mounted) {
+                        Navigator.pop(ctx); // ปิด dialog
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content:
+                                Text("📩 ลิงก์เปลี่ยนรหัสผ่านถูกส่งไปที่ $email"),
+                          ),
+                        );
+                      }
+                    } on FirebaseAuthException catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("Error: ${e.message}")),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    "ส่งลิงก์ไปยังอีเมล",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
-
-  /// เส้นทาง base ของ role
-  String _roleBasePath(String role) => switch (role) {
-        'teacher' => '/teacher',
-        'admin'   => '/admin',
-        _         => '/student',
-      };
-
-  /// ค่าฟอร์มเริ่มต้นตาม role
-  EditProfileInitial _buildInitial(String role) => switch (role) {
-        'teacher' => const EditProfileInitial(
-          name: 'Mr. A',
-          email: 'a@rmutl.ac.th',
-          phone: '09xxxxxxx',
-          teacherId: 'T-0123',
-        ),
-        'admin' => const EditProfileInitial(
-          name: 'Admin',
-          email: 'admin@rmutl.ac.th',
-          phone: '0xxxxxxxxx',
-        ),
-        _ => const EditProfileInitial(
-          name: 'Smith',
-          email: 'smith@example.com',
-          phone: '08xxxxxxx',
-          studentId: '66SE001',
-          className: 'SE-3/1',
-        ),
-      };
 
   @override
   Widget build(BuildContext context) {
-    final role    = _detectRole(context);
-    final base    = _roleBasePath(role);
-    final initial = _buildInitial(role);
-    final cs      = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
@@ -72,22 +144,38 @@ class SettingsPage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 38,
-                    backgroundColor: _primary,
-                    child: const CircleAvatar(
-                      radius: 34,
-                      // ถ้ามีรูปจริงให้เปลี่ยนเป็น NetworkImage/AssetImage
-                      child: Icon(Icons.person, size: 34, color: Colors.white),
-                    ),
+                    backgroundColor: SettingsPage._primary,
+                    backgroundImage: _avatar != null
+                        ? AssetImage('assets/avatars/$_avatar')
+                        : null,
+                    child: _avatar == null
+                        ? const Icon(Icons.person,
+                            size: 40, color: Colors.white)
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    initial.name ?? 'User',
+                    _name ?? 'User',
                     style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w800),
+                        fontSize: 18, fontWeight: FontWeight.w800),
                   ),
-                  if ((initial.email ?? '').isNotEmpty) ...[
+                  if ((_username ?? '').isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    Text(initial.email!, style: const TextStyle(color: _muted)),
+                    Text(_username!, style: TextStyle(color: SettingsPage._muted)),
+                  ],
+                  if ((_email ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(_email!, style: TextStyle(color: SettingsPage._muted)),
+                  ],
+                  if ((_role ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      _role!,
+                      style: TextStyle(
+                        color: cs.primary.withOpacity(0.7),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -101,23 +189,25 @@ class SettingsPage extends StatelessWidget {
               subtitle: 'Update your personal information',
               onTap: () => context.push(
                 '/profile/edit',
-                extra: {'role': role, 'initial': initial},
+                extra: {
+                  'role': 'student',
+                  'initial': EditProfileInitial(
+                    username: _username,
+                    name: _name,
+                    email: _email,
+                    studentId: null,
+                    className: null,
+                    avatar: _avatar, // ✅ ส่ง avatar ไปด้วย
+                  ),
+                },
               ),
             ),
             const SizedBox(height: 10),
             _SettingTile(
               icon: Icons.lock_reset_outlined,
               title: 'Change password',
-              subtitle: 'Update your account password',
-              onTap: () => context.push('/password/change'),
-            ),
-            const SizedBox(height: 10),
-            _SettingTile(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              subtitle: 'View app notifications & messages',
-              // ใช้ path ตาม role เพื่ออยู่ใน flow เดียวกัน (push เพื่อให้ back ได้)
-              onTap: () => context.push('$base/notifications'),
+              subtitle: 'Send reset link to your email',
+              onTap: () => _showResetDialog(context),
             ),
 
             const SizedBox(height: 24),
@@ -190,7 +280,7 @@ class _SettingTile extends StatelessWidget {
                     if (subtitle != null) ...[
                       const SizedBox(height: 3),
                       Text(subtitle!,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: SettingsPage._muted, fontSize: 12.5)),
                     ],
                   ],

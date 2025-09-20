@@ -1,73 +1,100 @@
-// lib/ui/common/edit_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EditProfileInitial {
+  final String? username;
   final String? name;
   final String? email;
-  final String? phone;
   final String? studentId;
   final String? className;
-  final String? teacherId;
+  final String? avatar;
+
   const EditProfileInitial({
+    this.username,
     this.name,
     this.email,
-    this.phone,
     this.studentId,
     this.className,
-    this.teacherId,
+    this.avatar,
   });
 }
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({
     super.key,
-    required this.role,          // 'student' | 'teacher' | 'admin'
+    required this.role,
     this.initial,
-    this.onSubmit,               // hook ต่อ service ภายนอกได้
   });
 
   final String role;
   final EditProfileInitial? initial;
-  final Future<void> Function(Map<String, dynamic> data)? onSubmit;
 
-  // THEME TOKENS
   static const _primary = Color(0xFF3D5CFF);
-  static const _label   = Color(0xFF8C8FA1);
-  static const _border  = Color(0xFFE5E7F0);
+  static const _label = Color(0xFF8C8FA1);
+  static const _border = Color(0xFFE5E7F0);
 
   @override
   State<EditProfilePage> createState() => _EditProfilePageState();
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  // Header + Avatar
-  static const double _headerH  = 200;   // ความสูงแถบสีน้ำเงิน
-  static const double _avatarR  = 44;    // รัศมีรูปโปรไฟล์
+  static const double _headerH = 200;
+  static const double _avatarR = 44;
 
   final _formKey = GlobalKey<FormState>();
 
-  // controllers
-  late final TextEditingController _name    = TextEditingController(text: widget.initial?.name ?? '');
-  late final TextEditingController _email   = TextEditingController(text: widget.initial?.email ?? '');
-  late final TextEditingController _phone   = TextEditingController(text: widget.initial?.phone ?? '');
-  late final TextEditingController _stuId   = TextEditingController(text: widget.initial?.studentId ?? '');
-  late final TextEditingController _teaId   = TextEditingController(text: widget.initial?.teacherId ?? '');
+  late final TextEditingController _username =
+      TextEditingController(text: widget.initial?.username ?? '');
+  late final TextEditingController _name =
+      TextEditingController(text: widget.initial?.name ?? '');
+  late final TextEditingController _email =
+      TextEditingController(text: widget.initial?.email ?? '');
+  late final TextEditingController _stuId =
+      TextEditingController(text: widget.initial?.studentId ?? '');
   String? _classValue;
+
+  String? _selectedAvatar;
 
   @override
   void initState() {
     super.initState();
     _classValue = widget.initial?.className;
+    _selectedAvatar = widget.initial?.avatar ?? '1.png';
+
+    // ✅ โหลดข้อมูลจริงจาก Firestore
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        setState(() {
+          _username.text = data['username'] ?? '';
+          _name.text = data['displayName'] ?? '';
+          _email.text = data['email'] ?? '';
+          _stuId.text = data['studentId'] ?? '';
+          _classValue = data['className'];
+          _selectedAvatar = data['avatar'] ?? '1.png';
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
+    }
   }
 
   @override
   void dispose() {
+    _username.dispose();
     _name.dispose();
     _email.dispose();
-    _phone.dispose();
     _stuId.dispose();
-    _teaId.dispose();
     super.dispose();
   }
 
@@ -76,12 +103,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return null;
   }
 
-  InputDecoration _decoration(String hint) => InputDecoration(
+  InputDecoration _decoration(String hint,
+          {bool readOnly = false, Color? fillColor}) =>
+      InputDecoration(
         hintText: hint,
         isDense: true,
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        fillColor: fillColor ?? (readOnly ? Colors.grey.shade200 : Colors.white),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: EditProfilePage._border),
@@ -92,7 +122,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: EditProfilePage._primary, width: 1.5),
+          borderSide:
+              const BorderSide(color: EditProfilePage._primary, width: 1.5),
         ),
       );
 
@@ -100,7 +131,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 12.5, color: EditProfilePage._label, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 12.5,
+            color: EditProfilePage._label,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
 
@@ -108,33 +143,70 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    final payload = <String, dynamic>{
-      'role'      : widget.role,
-      'name'      : _name.text.trim(),
-      'email'     : _email.text.trim(),
-      'phone'     : _phone.text.trim(),
-      'studentId' : _stuId.text.trim().isEmpty ? null : _stuId.text.trim(),
-      'teacherId' : _teaId.text.trim().isEmpty ? null : _teaId.text.trim(),
-      'className' : _classValue,
-    };
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    if (widget.onSubmit != null) {
-      await widget.onSubmit!(payload);
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'username': _username.text.trim(),
+        'displayName': _name.text.trim(),
+        'studentId': _stuId.text.trim().isEmpty ? null : _stuId.text.trim(),
+        'className': _classValue,
+        'avatar': _selectedAvatar,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+        );
+      }
     }
+  }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ')),
-      );
-      context.pop();
+  void _pickAvatar() async {
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('เลือก Avatar'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: 20,
+            itemBuilder: (context, index) {
+              final path = '${index + 1}.png';
+              return GestureDetector(
+                onTap: () => Navigator.pop(ctx, path),
+                child: CircleAvatar(
+                  backgroundImage: AssetImage('assets/avatars/$path'),
+                  radius: 30,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    if (chosen != null) {
+      setState(() => _selectedAvatar = chosen);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isStudent = widget.role == 'student';
-    final isTeacher = widget.role == 'teacher';
-    // admin = อื่นๆ
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -142,10 +214,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         bottom: false,
         child: Stack(
           children: [
-            // ---------- โครงหลัก ----------
             Column(
               children: [
-                // Header สีน้ำเงิน + ปุ่ม back
                 Container(
                   height: _headerH,
                   width: double.infinity,
@@ -154,13 +224,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white),
                       onPressed: () => context.pop(),
                     ),
                   ),
                 ),
-
-                // เนื้อหา: เผื่อพื้นที่ให้ avatar ลอย (ระยะ = avatarR + margin)
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(16, _avatarR + 24, 16, 24),
@@ -169,31 +238,39 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _label('Username'),
+                          TextFormField(
+                            controller: _username,
+                            validator: _required,
+                            decoration: _decoration('Username'),
+                          ),
+                          const SizedBox(height: 14),
+
                           _label('Name'),
-                          TextFormField(controller: _name, validator: _required, decoration: _decoration('Name')),
+                          TextFormField(
+                            controller: _name,
+                            validator: _required,
+                            decoration: _decoration('Name'),
+                          ),
                           const SizedBox(height: 14),
 
                           _label('Email'),
                           TextFormField(
                             controller: _email,
-                            validator: _required,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: _decoration('Email'),
-                          ),
-                          const SizedBox(height: 14),
-
-                          _label('Phone number'),
-                          TextFormField(
-                            controller: _phone,
-                            validator: _required,
-                            keyboardType: TextInputType.phone,
-                            decoration: _decoration('Phone number'),
+                            readOnly: true,
+                            decoration: _decoration('Email',
+                                readOnly: true,
+                                fillColor: Colors.grey.shade200),
                           ),
                           const SizedBox(height: 14),
 
                           if (isStudent) ...[
                             _label('Student ID'),
-                            TextFormField(controller: _stuId, validator: _required, decoration: _decoration('Student ID')),
+                            TextFormField(
+                              controller: _stuId,
+                              validator: _required,
+                              decoration: _decoration('Student ID'),
+                            ),
                             const SizedBox(height: 14),
 
                             _label('Class'),
@@ -201,33 +278,35 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               value: _classValue,
                               decoration: _decoration('Class'),
                               items: const [
-                                DropdownMenuItem(value: 'SE-3/1', child: Text('SE-3/1')),
-                                DropdownMenuItem(value: 'SE-3/2', child: Text('SE-3/2')),
-                                DropdownMenuItem(value: 'SE-4/1', child: Text('SE-4/1')),
+                                DropdownMenuItem(
+                                    value: 'SE-3/1', child: Text('SE-3/1')),
+                                DropdownMenuItem(
+                                    value: 'SE-3/2', child: Text('SE-3/2')),
+                                DropdownMenuItem(
+                                    value: 'SE-4/1', child: Text('SE-4/1')),
                               ],
-                              onChanged: (v) => setState(() => _classValue = v),
-                              validator: (v) => (v == null || v.isEmpty) ? 'กรุณาเลือกชั้นเรียน' : null,
+                              onChanged: (v) =>
+                                  setState(() => _classValue = v),
+                              validator: (v) => (v == null || v.isEmpty)
+                                  ? 'กรุณาเลือกชั้นเรียน'
+                                  : null,
                             ),
                             const SizedBox(height: 18),
                           ],
 
-                          if (isTeacher) ...[
-                            _label('Teacher ID'),
-                            TextFormField(controller: _teaId, validator: _required, decoration: _decoration('Teacher ID')),
-                            const SizedBox(height: 18),
-                          ],
-
-                          // Submit
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
                               style: FilledButton.styleFrom(
                                 backgroundColor: EditProfilePage._primary,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
                               ),
                               onPressed: _submit,
-                              child: const Text('Submit', style: TextStyle(fontSize: 16)),
+                              child: const Text('Submit',
+                                  style: TextStyle(fontSize: 16)),
                             ),
                           ),
                         ],
@@ -238,32 +317,42 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ],
             ),
 
-            // ---------- Avatar (ลอยซ้อนกึ่งกลาง) ----------
+            // ✅ Avatar + ปุ่มแก้ไข
             Positioned(
               top: _headerH - _avatarR,
               left: 0,
               right: 0,
               child: Center(
-                child: Container(
-                  width: (_avatarR * 2) + 12,
-                  height: (_avatarR * 2) + 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(.08),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: _avatarR,
+                      backgroundImage: _selectedAvatar != null
+                          ? AssetImage('assets/avatars/$_selectedAvatar')
+                          : null,
+                      backgroundColor: const Color(0xFFE9ECFF),
+                      child: _selectedAvatar == null
+                          ? const Icon(Icons.person,
+                              size: 34, color: Color(0xFF4B5563))
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: InkWell(
+                        onTap: _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.edit,
+                              size: 18, color: EditProfilePage._primary),
+                        ),
                       ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: CircleAvatar(
-                    radius: _avatarR,
-                    backgroundColor: const Color(0xFFE9ECFF),
-                    child: const Icon(Icons.person, size: 34, color: Color(0xFF4B5563)),
-                  ),
+                    )
+                  ],
                 ),
               ),
             ),

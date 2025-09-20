@@ -16,7 +16,6 @@ import 'ui/common/chat_page.dart';
 
 // ---------- shared pages -----
 import 'ui/common/edit_profile_page.dart';
-import 'ui/common/change_password_page.dart';
 
 // ---------- STUDENT ----------
 import 'ui/student/home_page.dart' as s;
@@ -89,7 +88,6 @@ class AppRouter {
           initial: (s.extra as Map?)?['initial'] as EditProfileInitial?,
         ),
       ),
-      GoRoute(path: '/password/change', builder: (_, __) => const ChangePasswordPage()),
 
       // Messages & Chat (นอก shell)
       GoRoute(path: '/student/messages', builder: (_, __) => const MessagesPage()),
