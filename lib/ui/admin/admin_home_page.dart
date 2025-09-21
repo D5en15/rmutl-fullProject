@@ -1,8 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class AdminHomePage extends StatelessWidget {
+class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
+
+  @override
+  State<AdminHomePage> createState() => _AdminHomePageState();
+}
+
+class _AdminHomePageState extends State<AdminHomePage> {
+  String? _adminName;
+  int _total = 0;
+  int _students = 0;
+  int _teachers = 0;
+  int _admins = 0;
+
+  String _selectedRole = 'เลือกบทบาท'; // ค่า default
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounts();
+  }
+
+  Future<void> _loadCounts() async {
+    final snap = await FirebaseFirestore.instance.collection('users').get();
+    int students = 0, teachers = 0, admins = 0;
+
+    for (var doc in snap.docs) {
+      final role = doc['role'] ?? '';
+      if (role == 'student') students++;
+      if (role == 'teacher') teachers++;
+      if (role == 'admin') admins++;
+      if (role == 'admin' && _adminName == null) {
+        _adminName = doc['displayName'] ?? 'Admin';
+      }
+    }
+
+    setState(() {
+      _students = students;
+      _teachers = teachers;
+      _admins = admins;
+      _total = students + teachers + admins;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,9 +54,18 @@ class AdminHomePage extends StatelessWidget {
         bottom: false,
         child: SingleChildScrollView(
           child: Column(
-            children: const [
-              _BlueHeader(),
-              _Body(),
+            children: [
+              _BlueHeader(adminName: _adminName ?? 'Admin'),
+              _Body(
+                total: _total,
+                students: _students,
+                teachers: _teachers,
+                admins: _admins,
+                selectedRole: _selectedRole,
+                onRoleChanged: (role) {
+                  setState(() => _selectedRole = role);
+                },
+              ),
             ],
           ),
         ),
@@ -34,7 +85,8 @@ class _T {
 
 /// ---------- BLUE HEADER ----------
 class _BlueHeader extends StatelessWidget {
-  const _BlueHeader();
+  const _BlueHeader({required this.adminName});
+  final String adminName;
 
   @override
   Widget build(BuildContext context) {
@@ -47,18 +99,18 @@ class _BlueHeader extends StatelessWidget {
         children: [
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Text(
-                'Hi, Admin',
-                style: TextStyle(
+                'Hi, $adminName',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: .2,
                 ),
               ),
-              SizedBox(height: 4),
-              Text("Let's start managing",
+              const SizedBox(height: 4),
+              const Text("Let's start managing",
                   style: TextStyle(color: Colors.white70, fontSize: 13)),
             ],
           ),
@@ -94,7 +146,18 @@ class _BlueHeader extends StatelessWidget {
 
 /// ---------- BODY ----------
 class _Body extends StatelessWidget {
-  const _Body();
+  const _Body({
+    required this.total,
+    required this.students,
+    required this.teachers,
+    required this.admins,
+    required this.selectedRole,
+    required this.onRoleChanged,
+  });
+
+  final int total, students, teachers, admins;
+  final String selectedRole;
+  final ValueChanged<String> onRoleChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -104,19 +167,19 @@ class _Body extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: _InfoCard(
                   icon: Icons.groups_2_outlined,
-                  value: '244',
+                  value: '$total',
                   label: 'Total users',
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _InfoCard(
                   icon: Icons.person_outline,
-                  value: '180',
+                  value: '$students',
                   label: 'Students',
                 ),
               ),
@@ -124,19 +187,19 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: _InfoCard(
                   icon: Icons.school_outlined,
-                  value: '42',
+                  value: '$teachers',
                   label: 'Teachers',
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _InfoCard(
                   icon: Icons.admin_panel_settings_outlined,
-                  value: '22',
+                  value: '$admins',
                   label: 'Admins',
                 ),
               ),
@@ -148,7 +211,7 @@ class _Body extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
 
-          // Dropdown (role)
+          // Dropdown
           Container(
             decoration: BoxDecoration(
               color: _T.soft,
@@ -158,13 +221,21 @@ class _Body extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: 'All roles',
+                value: selectedRole,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 isExpanded: true,
                 items: const [
-                  'All roles', 'Student', 'Teacher', 'Admin'
-                ].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                onChanged: (_) {},
+                  'เลือกบทบาท',
+                  'Student',
+                  'Teacher',
+                  'Admin',
+                ]
+                    .map((r) =>
+                        DropdownMenuItem(value: r, child: Text(r)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) onRoleChanged(v);
+                },
               ),
             ),
           ),
@@ -175,7 +246,25 @@ class _Body extends StatelessWidget {
           SizedBox(
             height: 48,
             child: ElevatedButton(
-              onPressed: () => context.go('/admin/users'),
+              onPressed: () {
+                if (selectedRole == 'เลือกบทบาท') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text("กรุณาเลือกบทบาทก่อน")),
+                  );
+                  return;
+                }
+
+                String? roleKey;
+                if (selectedRole == 'Student') roleKey = 'student';
+                else if (selectedRole == 'Teacher') roleKey = 'teacher';
+                else if (selectedRole == 'Admin') roleKey = 'admin';
+
+                context.push(
+                  '/admin/users',
+                  extra: {'filterRole': roleKey},
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _T.primary,
                 foregroundColor: Colors.white,
@@ -186,34 +275,6 @@ class _Body extends StatelessWidget {
               child: const Text('Go to User List'),
             ),
           ),
-
-          const SizedBox(height: 18),
-
-          // Rings
-          Row(
-            children: const [
-              Expanded(
-                child: _RingCard(
-                  title: 'Active users',
-                  percentText: '72%',
-                  percent: .72,
-                  showAlertNote: true,
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: _RingCard(
-                  title: 'Moderation pass',
-                  percentText: '89%',
-                  percent: .89,
-                  showAlertNote: false,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-          const _UserGrowthCard(),
         ],
       ),
     );
@@ -221,8 +282,11 @@ class _Body extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.icon, required this.value, required this.label});
-  final IconData icon; final String value; final String label;
+  const _InfoCard(
+      {required this.icon, required this.value, required this.label});
+  final IconData icon;
+  final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -232,22 +296,29 @@ class _InfoCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _T.cardBorder),
-        boxShadow: const [BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4))
+        ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
           Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: _T.soft, borderRadius: BorderRadius.circular(10)),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+                color: _T.soft, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: _T.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 2),
                 Text(label, style: const TextStyle(color: _T.muted)),
               ],
@@ -257,114 +328,4 @@ class _InfoCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RingCard extends StatelessWidget {
-  const _RingCard({required this.title, required this.percentText, required this.percent, required this.showAlertNote});
-  final String title, percentText; final double percent; final bool showAlertNote;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 118,
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.cardBorder),
-        boxShadow: const [BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4))],
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 58, height: 58,
-            child: Stack(fit: StackFit.expand, children: [
-              CircularProgressIndicator(
-                value: percent.clamp(0, 1), strokeWidth: 7,
-                backgroundColor: _T.cardBorder, color: _T.primary,
-              ),
-              Center(child: Text(percentText, style: const TextStyle(fontWeight: FontWeight.w700))),
-            ]),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 6),
-                if (showAlertNote)
-                  Row(children: const [
-                    Icon(Icons.circle, size: 8, color: Color(0xFFFF7A50)),
-                    SizedBox(width: 6),
-                    Text('Some alerts', style: TextStyle(fontSize: 12, color: _T.muted)),
-                  ]),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UserGrowthCard extends StatelessWidget {
-  const _UserGrowthCard();
-
-  @override
-  Widget build(BuildContext context) {
-    const data = [1.0, 1.6, 2.2, 2.0, 2.8, 3.6];
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.cardBorder),
-        boxShadow: const [BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4))],
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('User growth', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 12),
-          SizedBox(height: 170, width: double.infinity, child: CustomPaint(painter: _LineChartPainter(data))),
-        ],
-      ),
-    );
-  }
-}
-
-class _LineChartPainter extends CustomPainter {
-  _LineChartPainter(this.data);
-  final List<double> data;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()..color = const Color(0xFFEFF1F7)..strokeWidth = 1;
-    final border = Paint()..color = const Color(0xFFE1E3EC)..strokeWidth = 1;
-    const steps = 4;
-    for (var i = 0; i <= steps; i++) {
-      final y = size.height * (i / steps);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), i == steps ? border : grid);
-    }
-
-    const maxY = 4.0, minY = 0.0;
-    final dx = size.width / (data.length - 1);
-    final path = Path();
-    final line = Paint()
-      ..color = _T.primary
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-    final dot = Paint()..color = _T.primary;
-
-    for (var i = 0; i < data.length; i++) {
-      final x = i * dx;
-      final v = data[i].clamp(minY, maxY);
-      final y = size.height - ((v - minY) / (maxY - minY)) * size.height;
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
-      canvas.drawCircle(Offset(x, y), 3.5, dot);
-    }
-    canvas.drawPath(path, line);
-  }
-
-  @override
-  bool shouldRepaint(covariant _LineChartPainter oldDelegate) => oldDelegate.data != data;
 }
