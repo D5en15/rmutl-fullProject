@@ -188,7 +188,6 @@ class _PostCard extends StatelessWidget {
                         icon: const Icon(Icons.more_vert, size: 20),
                         onChanged: (value) {
                           if (value == 'edit') {
-                            // 👉 ต้องใช้ postId ก่อน แล้วค่อย /edit
                             context.push('$base/forum/${post.id}/edit');
                           } else if (value == 'delete') {
                             _deletePost(context);
@@ -211,6 +210,8 @@ class _PostCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 post.detail,
+                maxLines: 3, // ✅ จำกัดแค่ 3 บรรทัด
+                overflow: TextOverflow.ellipsis, // ✅ เกินจะตัดด้วย …
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: kForumTextDark,
