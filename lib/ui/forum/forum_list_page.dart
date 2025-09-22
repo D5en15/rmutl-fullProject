@@ -2,12 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// ---------- Global constants ----------
 const Color kForumTextDark = Color(0xFF2B2E3A);
-const Color kForumMuted    = Color(0xFF8B90A0);
-const Color kForumChipBg   = Color(0xFFF4F6FA);
-const double kCardRadius   = 12.0;
+const Color kForumMuted = Color(0xFF8B90A0);
+const Color kForumChipBg = Color(0xFFF4F6FA);
+const double kCardRadius = 12.0;
 
 class ForumListPage extends StatelessWidget {
   const ForumListPage({super.key});
@@ -15,14 +16,14 @@ class ForumListPage extends StatelessWidget {
   String _detectRole(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
     if (uri.startsWith('/teacher')) return 'teacher';
-    if (uri.startsWith('/admin'))   return 'admin';
+    if (uri.startsWith('/admin')) return 'admin';
     return 'student';
   }
 
   String _baseOf(String role) => switch (role) {
         'teacher' => '/teacher',
-        'admin'   => '/admin',
-        _         => '/student',
+        'admin' => '/admin',
+        _ => '/student',
       };
 
   String _timeAgo(DateTime time) {
@@ -37,6 +38,7 @@ class ForumListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final role = _detectRole(context);
     final base = _baseOf(role);
+    final currentUser = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -68,8 +70,9 @@ class ForumListPage extends StatelessWidget {
             final data = d.data() as Map<String, dynamic>;
             return _Post(
               id: d.id,
-              detail: data['content'] ?? '',        // ✅ แก้เป็น content
+              detail: data['content'] ?? '',
               authorName: data['authorName'] ?? 'Unknown',
+              authorId: data['authorId'] ?? '',
               createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
             );
           }).toList();
@@ -85,6 +88,8 @@ class ForumListPage extends StatelessWidget {
                 timeText: p.createdAt != null ? _timeAgo(p.createdAt!) : "",
                 onTap: () => context.push('$base/forum/${p.id}'),
                 onView: () => context.push('$base/forum/${p.id}'),
+                canManage: role == 'admin' || p.authorId == currentUser?.uid,
+                base: base,
               );
             },
           );
@@ -99,11 +104,13 @@ class _Post {
   final String id;
   final String detail;
   final String authorName;
+  final String authorId;
   final DateTime? createdAt;
   const _Post({
     required this.id,
     required this.detail,
     required this.authorName,
+    required this.authorId,
     required this.createdAt,
   });
 }
@@ -115,12 +122,33 @@ class _PostCard extends StatelessWidget {
     required this.timeText,
     required this.onTap,
     required this.onView,
+    required this.canManage,
+    required this.base,
   });
 
   final _Post post;
   final String timeText;
   final VoidCallback onTap;
   final VoidCallback onView;
+  final bool canManage;
+  final String base;
+
+  Future<void> _deletePost(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance.collection('posts').doc(post.id).delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ลบโพสต์สำเร็จ')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,18 +180,32 @@ class _PostCard extends StatelessWidget {
                     style: const TextStyle(color: kForumMuted, fontSize: 12),
                   ),
                   const Spacer(),
-                  PopupMenuButton<String>(
-                    tooltip: 'More',
-                    icon: const Icon(Icons.more_vert, size: 20),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'share', child: Text('Share')),
-                      PopupMenuItem(value: 'report', child: Text('Report')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
-                    onSelected: (v) {
-                      // TODO: handle actions
-                    },
-                  ),
+
+                  // ✅ Dropdown แก้ไข + ลบ
+                  if (canManage)
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 20),
+                        onChanged: (value) {
+                          if (value == 'edit') {
+                            // 👉 ต้องใช้ postId ก่อน แล้วค่อย /edit
+                            context.push('$base/forum/${post.id}/edit');
+                          } else if (value == 'delete') {
+                            _deletePost(context);
+                          }
+                        },
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'edit',
+                            child: Text('แก้ไข'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'delete',
+                            child: Text('ลบ'),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 6),

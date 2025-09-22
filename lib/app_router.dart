@@ -58,6 +58,7 @@ import 'ui/admin/career_edit_page.dart';
 import 'ui/forum/forum_list_page.dart';
 import 'ui/forum/post_detail_page.dart';
 import 'ui/forum/create_post_page.dart';
+import 'ui/forum/edit_post_page.dart'; // ✅ เพิ่มใหม่
 
 class AppRouter {
   static final _rootKey = GlobalKey<NavigatorState>();
@@ -139,6 +140,11 @@ class AppRouter {
                 builder: (_, s) =>
                     PostDetailPage(postId: s.pathParameters['postId']!),
               ),
+              GoRoute(
+                path: ':postId/edit',
+                builder: (_, s) =>
+                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
+              ),
             ],
           ),
           GoRoute(path: '/student/settings', builder: (_, __) => const SettingsPage()),
@@ -177,6 +183,11 @@ class AppRouter {
                 path: ':postId',
                 builder: (_, s) =>
                     PostDetailPage(postId: s.pathParameters['postId']!),
+              ),
+              GoRoute(
+                path: ':postId/edit',
+                builder: (_, s) =>
+                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
               ),
             ],
           ),
@@ -286,6 +297,11 @@ class AppRouter {
                 builder: (_, s) =>
                     PostDetailPage(postId: s.pathParameters['postId']!),
               ),
+              GoRoute(
+                path: ':postId/edit',
+                builder: (_, s) =>
+                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
+              ),
             ],
           ),
 
@@ -314,6 +330,11 @@ class AppRouter {
             path: ':postId',
             builder: (_, s) =>
                 PostDetailPage(postId: s.pathParameters['postId']!),
+          ),
+          GoRoute(
+            path: ':postId/edit',
+            builder: (_, s) =>
+                EditPostPage(postId: s.pathParameters['postId']!), // ✅
           ),
         ],
       ),
