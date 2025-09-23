@@ -1,6 +1,7 @@
+// lib/ui/admin/subject_add_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SubjectAddPage extends StatefulWidget {
   const SubjectAddPage({super.key});
@@ -12,29 +13,30 @@ class SubjectAddPage extends StatefulWidget {
 class _SubjectAddPageState extends State<SubjectAddPage> {
   // design tokens
   static const _primary = Color(0xFF3D5CFF);
-  static const _border  = Color(0xFFEFF1F7);
-  static const _shadow  = Color(0x0D000000);
+  static const _border = Color(0xFFEFF1F7);
+  static const _shadow = Color(0x0D000000);
 
   final _form = GlobalKey<FormState>();
 
-  String? _name;
+  final _code = TextEditingController();
+  final _nameTh = TextEditingController();
+  final _nameEn = TextEditingController();
   final _credits = TextEditingController();
-  final _gpa     = TextEditingController();
-  final _skill   = TextEditingController();
 
   @override
   void dispose() {
+    _code.dispose();
+    _nameTh.dispose();
+    _nameEn.dispose();
     _credits.dispose();
-    _gpa.dispose();
-    _skill.dispose();
     super.dispose();
   }
 
-  InputDecoration _boxDeco({String? hint}) => InputDecoration(
-        hintText: hint,
+  InputDecoration _boxDeco() => InputDecoration(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _border),
@@ -49,9 +51,13 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
         alignment: Alignment.centerLeft,
         child: Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(text,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, color: Colors.black87)),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
         ),
       );
 
@@ -60,14 +66,14 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Add Subjects'),
+        title: const Text('Add Subject'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          // ✅ กลับไปหน้า Dashboard → Subjects list
+          // ✅ กลับไปหน้า Subjects list
           onPressed: () => context.go('/admin/config/subjects'),
         ),
       ),
@@ -87,55 +93,36 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _fieldLabel('Subject name'),
-                    DropdownButtonFormField<String>(
-                      value: _name,
+                    _fieldLabel('Subject Code'),
+                    TextFormField(
+                      controller: _code,
                       decoration: _boxDeco(),
-                      items: const [
-                        'Programming 101',
-                        'Linear Algebra',
-                        'Physics for Engineer'
-                      ]
-                          .map((e) =>
-                              DropdownMenuItem(value: e, child: Text(e)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _name = v),
-                      validator: (v) => v == null || v.isEmpty
-                          ? 'Please select subject'
-                          : null,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    _fieldLabel('Name (TH)'),
+                    TextFormField(
+                      controller: _nameTh,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    _fieldLabel('Name (EN)'),
+                    TextFormField(
+                      controller: _nameEn,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
                     ),
                     const SizedBox(height: 14),
 
                     _fieldLabel('Credits'),
                     TextFormField(
                       controller: _credits,
-                      decoration: _boxDeco(),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[0-9]'))
-                      ],
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 14),
-
-                    _fieldLabel('Grade point'),
-                    TextFormField(
-                      controller: _gpa,
-                      decoration: _boxDeco(),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
-                      ],
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 14),
-
-                    _fieldLabel('Skill'),
-                    TextFormField(
-                      controller: _skill,
                       decoration: _boxDeco(),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -167,11 +154,19 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!(_form.currentState?.validate() ?? false)) return;
 
+    await FirebaseFirestore.instance.collection('subjects').add({
+      'code': _code.text.trim(),
+      'name_th': _nameTh.text.trim(),
+      'name_en': _nameEn.text.trim(),
+      'credits': _credits.text.trim(),
+    });
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Added (mock)')),
+      const SnackBar(content: Text('Subject added')),
     );
 
     context.go('/admin/config/subjects');

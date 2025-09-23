@@ -1,25 +1,33 @@
+// lib/ui/admin/subjects_manage_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SubjectsManagePage extends StatelessWidget {
+class SubjectsManagePage extends StatefulWidget {
   const SubjectsManagePage({super.key});
+
+  @override
+  State<SubjectsManagePage> createState() => _SubjectsManagePageState();
 
   // design tokens
   static const _primary = Color(0xFF3D5CFF);
-  static const _muted   = Color(0xFF858597);
-  static const _soft    = Color(0xFFF6F7FF);
-  static const _border  = Color(0xFFEFF1F7);
-  static const _shadow  = Color(0x0D000000);
+  static const _muted = Color(0xFF858597);
+  static const _soft = Color(0xFFF6F7FF);
+  static const _border = Color(0xFFEFF1F7);
+  static const _shadow = Color(0x0D000000);
+}
+
+class _SubjectsManagePageState extends State<SubjectsManagePage> {
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // mock data
-    final items = const [
-      ('Programming 101',     'Grade A • 3 credits', Icons.menu_book_outlined),
-      ('Linear Algebra',      'Grade B+ • 3 credits', Icons.edit_note_outlined),
-      ('Physics for Engineer','Grade C • 4 credits', Icons.menu_book_outlined),
-    ];
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -36,26 +44,90 @@ class SubjectsManagePage extends StatelessWidget {
       ),
 
       floatingActionButton: FloatingActionButton(
-        backgroundColor: _primary,
+        backgroundColor: SubjectsManagePage._primary,
         onPressed: () => context.go('/admin/config/subjects/add'),
         child: const Icon(Icons.add, color: Colors.white),
       ),
 
       body: SafeArea(
         top: false,
-        child: ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, i) {
-            final (title, subtitle, icon) = items[i];
-            return _SubjectTile(
-              title: title,
-              subtitle: subtitle,
-              icon: icon,
-              onTap: () => context.go('/admin/config/subjects/$i/edit'),
-            );
-          },
+        child: Column(
+          children: [
+            // 🔍 ช่องค้นหา
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: 'ค้นหารายวิชา...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F6FA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+
+            // 📜 รายการวิชา
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('subjects')
+                    .orderBy('code')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text("ยังไม่มีรายวิชา"));
+                  }
+
+                  final query = _searchCtrl.text.toLowerCase();
+                  final docs = snapshot.data!.docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final code = (data['code'] ?? '').toString().toLowerCase();
+                    final nameTh =
+                        (data['name_th'] ?? '').toString().toLowerCase();
+                    final nameEn =
+                        (data['name_en'] ?? '').toString().toLowerCase();
+                    return code.contains(query) ||
+                        nameTh.contains(query) ||
+                        nameEn.contains(query);
+                  }).toList();
+
+                  if (docs.isEmpty) {
+                    return const Center(child: Text("ไม่พบรายวิชา"));
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    itemCount: docs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final id = docs[i].id;
+                      final title = "${data['code']} • ${data['name_en'] ?? ''}";
+                      final subtitle =
+                          "${data['name_th'] ?? ''} • ${data['credits'] ?? ''}";
+
+                      return _SubjectTile(
+                        title: title,
+                        subtitle: subtitle,
+                        icon: Icons.menu_book_outlined,
+                        onTap: () =>
+                            context.go('/admin/config/subjects/$id/edit'),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -76,10 +148,10 @@ class _SubjectTile extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _primary = SubjectsManagePage._primary;
-  static const _soft    = SubjectsManagePage._soft;
-  static const _border  = SubjectsManagePage._border;
-  static const _shadow  = SubjectsManagePage._shadow;
-  static const _muted   = SubjectsManagePage._muted;
+  static const _soft = SubjectsManagePage._soft;
+  static const _border = SubjectsManagePage._border;
+  static const _shadow = SubjectsManagePage._shadow;
+  static const _muted = SubjectsManagePage._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +173,8 @@ class _SubjectTile extends StatelessWidget {
             color: Colors.white,
           ),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             leading: Container(
               width: 46,
               height: 46,
@@ -111,7 +184,8 @@ class _SubjectTile extends StatelessWidget {
               ),
               child: Icon(icon, color: _primary, size: 26),
             ),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            title: Text(title,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(subtitle, style: const TextStyle(color: _muted)),
             trailing: IconButton(
               icon: const Icon(Icons.edit_outlined),

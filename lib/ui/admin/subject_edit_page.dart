@@ -1,6 +1,7 @@
+// lib/ui/admin/subject_edit_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SubjectEditPage extends StatefulWidget {
   const SubjectEditPage({super.key, required this.subjectId});
@@ -12,21 +13,45 @@ class SubjectEditPage extends StatefulWidget {
 
 class _SubjectEditPageState extends State<SubjectEditPage> {
   static const _primary = Color(0xFF3D5CFF);
-  static const _border  = Color(0xFFEFF1F7);
-  static const _shadow  = Color(0x0D000000);
+  static const _border = Color(0xFFEFF1F7);
+  static const _shadow = Color(0x0D000000);
 
   final _form = GlobalKey<FormState>();
 
-  String? _name = 'Programming 101';
-  final _credits = TextEditingController(text: '3');
-  final _gpa     = TextEditingController(text: '4.0');
-  final _skill   = TextEditingController(text: 'Programming');
+  final _code = TextEditingController();
+  final _nameTh = TextEditingController();
+  final _nameEn = TextEditingController();
+  final _credits = TextEditingController();
+
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubject();
+  }
+
+  Future<void> _loadSubject() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('subjects')
+        .doc(widget.subjectId)
+        .get();
+    if (doc.exists) {
+      final data = doc.data()!;
+      _code.text = data['code'] ?? '';
+      _nameTh.text = data['name_th'] ?? '';
+      _nameEn.text = data['name_en'] ?? '';
+      _credits.text = data['credits'] ?? '';
+    }
+    setState(() => _loading = false);
+  }
 
   @override
   void dispose() {
+    _code.dispose();
+    _nameTh.dispose();
+    _nameEn.dispose();
     _credits.dispose();
-    _gpa.dispose();
-    _skill.dispose();
     super.dispose();
   }
 
@@ -34,7 +59,8 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _border),
@@ -62,127 +88,131 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Edit Subjects'),
+        title: const Text('Edit Subject'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
-        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: _goBackToSubjects,
         ),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Form(
-            key: _form,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _fieldLabel('Subject name'),
-                DropdownButtonFormField<String>(
-                  value: _name,
-                  decoration: _boxDeco(),
-                  items: const [
-                    'Programming 101',
-                    'Linear Algebra',
-                    'Physics for Engineer'
-                  ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (v) => setState(() => _name = v),
-                  validator: (v) => (v == null || v.isEmpty)
-                      ? 'Please select subject'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel('Credits'),
-                TextFormField(
-                  controller: _credits,
-                  decoration: _boxDeco(),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel('Grade point'),
-                TextFormField(
-                  controller: _gpa,
-                  decoration: _boxDeco(),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                  ],
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel('Skill'),
-                TextFormField(
-                  controller: _skill,
-                  decoration: _boxDeco(),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 22),
-
-                SizedBox(
-                  height: 48,
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              bottom: false,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Form(
+                  key: _form,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _fieldLabel('Subject Code'),
+                      TextFormField(
+                        controller: _code,
+                        decoration: _boxDeco(hint: "ENGSE101"),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Required' : null,
                       ),
-                    ),
-                    child: const Text('Submit'),
+                      const SizedBox(height: 14),
+
+                      _fieldLabel('Name (TH)'),
+                      TextFormField(
+                        controller: _nameTh,
+                        decoration: _boxDeco(hint: "ชื่อวิชาภาษาไทย"),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 14),
+
+                      _fieldLabel('Name (EN)'),
+                      TextFormField(
+                        controller: _nameEn,
+                        decoration: _boxDeco(hint: "Subject name in English"),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 14),
+
+                      _fieldLabel('Credits'),
+                      TextFormField(
+                        controller: _credits,
+                        decoration: _boxDeco(hint: "3(3-0-6)"),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 22),
+
+                      SizedBox(
+                        height: 48,
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Submit'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        height: 48,
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _delete,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFE53935),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Delete'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                SizedBox(
-                  height: 48,
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _delete,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE53935),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Delete'),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!(_form.currentState?.validate() ?? false)) return;
 
+    await FirebaseFirestore.instance
+        .collection('subjects')
+        .doc(widget.subjectId)
+        .update({
+      'code': _code.text.trim(),
+      'name_th': _nameTh.text.trim(),
+      'name_en': _nameEn.text.trim(),
+      'credits': _credits.text.trim(),
+    });
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved (mock)')),
+      const SnackBar(content: Text('Subject updated')),
     );
     _goBackToSubjects();
   }
 
-  void _delete() {
+  Future<void> _delete() async {
+    await FirebaseFirestore.instance
+        .collection('subjects')
+        .doc(widget.subjectId)
+        .delete();
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Deleted (mock)')),
+      const SnackBar(content: Text('Subject deleted')),
     );
     _goBackToSubjects();
   }
