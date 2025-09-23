@@ -1,128 +1,286 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class MessagesPage extends StatelessWidget {
+class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
 
-  static const _muted = Color(0xFF858597);
-  static const _primary = Color(0xFF3D5CFF);
+  @override
+  State<MessagesPage> createState() => _MessagesPageState();
+}
+
+class _MessagesPageState extends State<MessagesPage> {
+  final _searchCtrl = TextEditingController();
 
   String _detectRole(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
     if (uri.startsWith('/teacher')) return 'teacher';
-    if (uri.startsWith('/admin'))   return 'admin';
+    if (uri.startsWith('/admin')) return 'admin';
     return 'student';
   }
 
   String _baseOf(String role) => switch (role) {
         'teacher' => '/teacher',
-        'admin'   => '/admin',
-        _         => '/student',
+        'admin' => '/admin',
+        _ => '/student',
       };
+
+  String _threadId(String uid1, String uid2) {
+    final a = [uid1, uid2]..sort();
+    return '${a[0]}_${a[1]}';
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+
+    if (diff.inMinutes < 1) return "just now";
+    if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
+    if (diff.inHours < 24) return "${diff.inHours}h ago";
+
+    return "${dt.day}/${dt.month}/${dt.year}";
+  }
 
   @override
   Widget build(BuildContext context) {
     final role = _detectRole(context);
     final base = _baseOf(role);
+    final currentUser = FirebaseAuth.instance.currentUser;
 
-    final threads = List.generate(
-      8,
-      (i) => _ThreadTileData(
-        id: 't$i',
-        name: i.isEven ? 'Bert Pullman' : 'Daniel Lawson',
-        online: i.isEven,
-        time: i.isEven ? '04:32 pm' : '12:00 am',
-        lastMessage:
-            'Congratulations on completing the first lesson, keep up the good work!',
-        hasPreviewBox: i.isEven,
-      ),
-    );
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(child: Text("กรุณาเข้าสู่ระบบ")),
+      );
+    }
+
+    final bool isSearching = _searchCtrl.text.isNotEmpty;
 
     return WillPopScope(
-      // ถ้ากด back ของระบบ แต่สแต็กว่าง ให้พาไป Notifications
       onWillPop: () async {
         if (Navigator.of(context).canPop()) return true;
-        context.go('$base/notifications');
+        context.go(base);
         return false;
       },
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // ---------- Header ----------
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          context.pop(); // กลับไป Notifications (ที่ push มา)
-                        } else {
-                          context.go('$base/notifications'); // fallback
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Notifications',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
+        appBar: AppBar(
+          title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.w800)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                context.pop();
+              } else {
+                context.go(base);
+              }
+            },
+          ),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 0,
+        ),
+        body: Column(
+          children: [
+            // ---------- Tabs ----------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  _TabButton(
+                    text: 'notification',
+                    isActive: false,
+                    onTap: () => context.go('$base/notifications'),
+                  ),
+                  const SizedBox(width: 18),
+                  _TabButton(
+                    text: 'message',
+                    isActive: true,
+                    trailingDot: true,
+                    onTap: () {}, // อยู่หน้า message แล้ว
+                  ),
+                ],
               ),
+            ),
 
-              // ---------- Tabs ----------
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _TabButton(
-                      text: 'notification',
-                      isActive: false,
-                      onTap: () {
-                        if (Navigator.of(context).canPop()) {
-                          context.pop(); // กลับแท็บ notification ในสแต็กเดิม
-                        } else {
-                          context.push('$base/notifications'); // fallback
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 18),
-                    _TabButton(
-                      text: 'message',
-                      isActive: true,
-                      trailingDot: true,
-                      onTap: () {}, // อยู่หน้า message แล้ว
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // ---------- List ----------
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemCount: threads.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) => _ThreadTile(
-                    data: threads[i],
-                    onTap: () => context.push('/chat/${threads[i].id}'),
+            // ---------- Search ----------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: 'ค้นหารายชื่อ...',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F6FA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
                 ),
+                onChanged: (_) => setState(() {}),
               ),
-            ],
-          ),
+            ),
+
+            // ---------- List ----------
+            Expanded(
+              child: isSearching
+                  // 🔍 ค้นหาผู้ใช้ทั้งหมด
+                  ? StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!snap.hasData || snap.data!.docs.isEmpty) {
+                          return const Center(child: Text("ยังไม่มีผู้ใช้"));
+                        }
+
+                        final users = snap.data!.docs.where((u) => u.id != currentUser.uid);
+                        final filtered = users.where((u) {
+                          final data = u.data() as Map<String, dynamic>;
+                          final name = data['displayName'] ?? data['email'] ?? '';
+                          return name.toLowerCase().contains(_searchCtrl.text.toLowerCase());
+                        });
+
+                        if (filtered.isEmpty) {
+                          return const Center(child: Text("ไม่พบผู้ใช้"));
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final doc = filtered.elementAt(i);
+                            final data = doc.data() as Map<String, dynamic>;
+                            final uid = doc.id;
+                            final name = data['displayName'] ?? data['email'] ?? 'Unknown';
+                            final avatar = data['avatar'];
+                            final tid = _threadId(currentUser.uid, uid);
+
+                            return ListTile(
+                              leading: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: const Color(0xFFD9FFEE),
+                                backgroundImage: avatar != null
+                                    ? AssetImage('assets/avatars/$avatar')
+                                    : null,
+                                child: avatar == null
+                                    ? const Icon(Icons.person, color: Colors.white)
+                                    : null,
+                              ),
+                              title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              subtitle: const Text("แตะเพื่อเริ่มแชท",
+                                  style: TextStyle(color: Color(0xFF707070))),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/chat/$tid'),
+                            );
+                          },
+                        );
+                      },
+                    )
+                  // 📜 แสดงเฉพาะคนที่เคยแชท
+                  : StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('chats')
+                          .where('participants', arrayContains: currentUser.uid)
+                          .orderBy('updatedAt', descending: true)
+                          .snapshots(),
+                      builder: (context, chatSnap) {
+                        if (chatSnap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!chatSnap.hasData || chatSnap.data!.docs.isEmpty) {
+                          return const Center(child: Text("ยังไม่มีการสนทนา"));
+                        }
+
+                        final chatDocs = chatSnap.data!.docs;
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          itemCount: chatDocs.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final chat = chatDocs[i];
+                            final data = chat.data() as Map<String, dynamic>;
+                            final participants = List<String>.from(data['participants'] ?? []);
+                            if (participants.length < 2) return const SizedBox();
+
+                            final otherUid = participants.firstWhere(
+                              (id) => id != currentUser.uid,
+                              orElse: () => '',
+                            );
+                            if (otherUid.isEmpty) return const SizedBox();
+
+                            return FutureBuilder<DocumentSnapshot>(
+                              future: FirebaseFirestore.instance.collection('users').doc(otherUid).get(),
+                              builder: (context, userSnap) {
+                                if (!userSnap.hasData || !userSnap.data!.exists) {
+                                  return const SizedBox();
+                                }
+                                final udata = userSnap.data!.data() as Map<String, dynamic>;
+                                final name = udata['displayName'] ?? udata['email'] ?? 'Unknown';
+                                final avatar = udata['avatar'];
+                                final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
+
+                                return StreamBuilder<QuerySnapshot>(
+                                  stream: FirebaseFirestore.instance
+                                      .collection('chats')
+                                      .doc(chat.id)
+                                      .collection('messages')
+                                      .orderBy('createdAt', descending: true)
+                                      .limit(1)
+                                      .snapshots(),
+                                  builder: (_, msgSnap) {
+                                    String lastText = "ยังไม่มีข้อความ";
+                                    if (msgSnap.hasData && msgSnap.data!.docs.isNotEmpty) {
+                                      final last = msgSnap.data!.docs.first.data() as Map<String, dynamic>;
+                                      lastText = last['text'] ?? '';
+                                    }
+
+                                    return ListTile(
+                                      leading: CircleAvatar(
+                                        radius: 22,
+                                        backgroundColor: const Color(0xFFD9FFEE),
+                                        backgroundImage: avatar != null
+                                            ? AssetImage('assets/avatars/$avatar')
+                                            : null,
+                                        child: avatar == null
+                                            ? const Icon(Icons.person, color: Colors.white)
+                                            : null,
+                                      ),
+                                      title: Text(name,
+                                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                                      subtitle: Text(
+                                        lastText,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Color(0xFF707070)),
+                                      ),
+                                      trailing: Text(
+                                        updatedAt != null ? _formatTime(updatedAt) : "",
+                                        style: const TextStyle(
+                                            color: Color(0xFF9CA3AF), fontSize: 12),
+                                      ),
+                                      onTap: () => context.push('/chat/${chat.id}'),
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ใช้ซ้ำกับหน้า Notifications
 class _TabButton extends StatelessWidget {
   const _TabButton({
     required this.text,
@@ -151,6 +309,7 @@ class _TabButton extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   text,
@@ -165,134 +324,21 @@ class _TabButton extends StatelessWidget {
                       color: Colors.orange,
                       shape: BoxShape.circle,
                     ),
-                  )
-                ]
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 6),
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               height: 3,
-              width: isActive ? 70 : 0,
+              width: isActive ? 90 : 0,
               decoration: BoxDecoration(
                 color: _primary,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ThreadTileData {
-  final String id;
-  final String name;
-  final bool online;
-  final String time;
-  final String lastMessage;
-  final bool hasPreviewBox;
-  _ThreadTileData({
-    required this.id,
-    required this.name,
-    required this.online,
-    required this.time,
-    required this.lastMessage,
-    required this.hasPreviewBox,
-  });
-}
-
-class _ThreadTile extends StatelessWidget {
-  const _ThreadTile({required this.data, required this.onTap});
-  final _ThreadTileData data;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PhysicalModel(
-      color: Colors.white,
-      elevation: 3,
-      shadowColor: Colors.black12,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD9FFEE),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              data.name,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              data.online ? 'Online' : 'Offline',
-                              style: TextStyle(
-                                color: data.online
-                                    ? const Color(0xFF00B894)
-                                    : const Color(0xFF9CA3AF),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              data.time,
-                              style: const TextStyle(
-                                color: Color(0xFF9CA3AF),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          data.lastMessage,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Color(0xFF707070)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if (data.hasPreviewBox) ...[
-                const SizedBox(height: 12),
-                Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFE3EA),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
       ),
     );

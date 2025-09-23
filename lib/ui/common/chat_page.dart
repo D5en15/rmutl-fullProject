@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key, required this.threadId});
@@ -15,24 +17,70 @@ class _ChatPageState extends State<ChatPage> {
   static const _primary = Color(0xFF3D5CFF);
   static const _bubbleBg = Color(0xFFF4F6FF);
 
-  // mock messages
-  final _messages = <_Msg>[
-    const _Msg(left: true, name: 'Brooke', text: 'Hey Lucas!'),
-    const _Msg(left: true, name: 'Brooke', text: "How's your project going?"),
-    const _Msg(left: false, name: 'Lucas', text: "It's going well. Thanks for asking!"),
-    const _Msg(left: true, name: 'Brooke', text: 'No worries. Let me know if you need any help 😊'),
-    const _Msg(left: false, name: 'Lucas', text: "You're the best!"),
-  ];
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send(String text) async {
+    if (text.trim().isEmpty) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final chatRef =
+        FirebaseFirestore.instance.collection('chats').doc(widget.threadId);
+
+    // ✅ ดึง participants เดิมจาก chat
+    final snap = await chatRef.get();
+    List<dynamic> participants = [];
+    if (snap.exists) {
+      final data = snap.data() as Map<String, dynamic>;
+      participants = List.from(data['participants'] ?? []);
+    }
+
+    // ✅ หา otherUid จาก chatId (split ด้วย "_")
+    final ids = widget.threadId.split("_");
+    String? otherUid;
+    if (ids.length == 2) {
+      otherUid = ids.firstWhere((id) => id != user.uid, orElse: () => user.uid);
+    }
+
+    // ✅ เพิ่ม currentUser + otherUid ลง participants
+    final updatedParticipants = {
+      user.uid,
+      if (otherUid != null) otherUid,
+      ...participants,
+    }.toList();
+
+    await chatRef.set({
+      'participants': updatedParticipants,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // ✅ เพิ่ม message
+    await chatRef.collection('messages').add({
+      'text': text.trim(),
+      'senderId': user.uid,
+      'senderName': user.displayName ?? user.email ?? 'Unknown',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    _controller.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            // AppBar
+            // ---------- AppBar ----------
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
               child: Row(
@@ -42,9 +90,10 @@ class _ChatPageState extends State<ChatPage> {
                     onPressed: () => context.pop(),
                   ),
                   const Spacer(),
-                  const Text('Brooke Davis',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  const Text(
+                    'Chat',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
                   const Spacer(),
                   const CircleAvatar(
                     radius: 16,
@@ -56,37 +105,53 @@ class _ChatPageState extends State<ChatPage> {
             ),
             const SizedBox(height: 8),
 
-            // Messages
+            // ---------- Messages ----------
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                itemCount: _messages.length,
-                itemBuilder: (_, i) {
-                  final m = _messages[i];
-                  return Align(
-                    alignment:
-                        m.left ? Alignment.centerLeft : Alignment.centerRight,
-                    child: _Bubble(
-                      left: m.left,
-                      label: m.name,
-                      text: m.text,
-                    ),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('chats')
+                    .doc(widget.threadId)
+                    .collection('messages')
+                    .orderBy('createdAt', descending: false)
+                    .snapshots(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snap.hasData || snap.data!.docs.isEmpty) {
+                    return const Center(child: Text("ยังไม่มีข้อความ"));
+                  }
+
+                  final docs = snap.data!.docs;
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final isMe = data['senderId'] == user?.uid;
+                      return Align(
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: _Bubble(
+                          left: !isMe,
+                          label: data['senderName'] ?? 'Unknown',
+                          text: data['text'] ?? '',
+                          time: (data['createdAt'] as Timestamp?)?.toDate(),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
             ),
 
-            // Input Bar
+            // ---------- Input Bar ----------
             SafeArea(
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                 child: Row(
                   children: [
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.add, color: Color(0xFF3D5CFF)),
-                    ),
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -118,31 +183,33 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
-
-  void _send(String text) {
-    if (text.trim().isEmpty) return;
-    setState(() {
-      _messages.add(_Msg(left: false, name: 'Me', text: text.trim()));
-      _controller.clear();
-    });
-  }
-}
-
-class _Msg {
-  final bool left;
-  final String name;
-  final String text;
-  const _Msg({required this.left, required this.name, required this.text});
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.left, required this.label, required this.text});
+  const _Bubble({
+    required this.left,
+    required this.label,
+    required this.text,
+    this.time,
+  });
+
   final bool left;
   final String label;
   final String text;
+  final DateTime? time;
 
   static const _primary = Color(0xFF3D5CFF);
   static const _bubbleBg = Color(0xFFF4F6FF);
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return "just now";
+    if (diff.inMinutes < 60) return "${diff.inMinutes}m ago";
+    if (diff.inHours < 24) return "${diff.inHours}h ago";
+    return "${dt.day}/${dt.month}/${dt.year}";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -178,7 +245,20 @@ class _Bubble extends StatelessWidget {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(color: bg, borderRadius: radius),
-            child: Text(text, style: TextStyle(color: fg, fontSize: 14.5)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text, style: TextStyle(color: fg, fontSize: 14.5)),
+                if (time != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _formatTime(time),
+                      style: TextStyle(color: fg.withOpacity(0.7), fontSize: 10),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
