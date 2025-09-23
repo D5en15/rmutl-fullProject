@@ -1,3 +1,4 @@
+// lib/ui/common/messages_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -65,7 +66,8 @@ class _MessagesPageState extends State<MessagesPage> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.w800)),
+          title: const Text('Messages',
+              style: TextStyle(fontWeight: FontWeight.w800)),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             onPressed: () {
@@ -127,20 +129,27 @@ class _MessagesPageState extends State<MessagesPage> {
               child: isSearching
                   // 🔍 ค้นหาผู้ใช้ทั้งหมด
                   ? StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .snapshots(),
                       builder: (context, snap) {
                         if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                              child: CircularProgressIndicator());
                         }
                         if (!snap.hasData || snap.data!.docs.isEmpty) {
                           return const Center(child: Text("ยังไม่มีผู้ใช้"));
                         }
 
-                        final users = snap.data!.docs.where((u) => u.id != currentUser.uid);
+                        final users =
+                            snap.data!.docs.where((u) => u.id != currentUser.uid);
                         final filtered = users.where((u) {
                           final data = u.data() as Map<String, dynamic>;
-                          final name = data['displayName'] ?? data['email'] ?? '';
-                          return name.toLowerCase().contains(_searchCtrl.text.toLowerCase());
+                          final name =
+                              data['displayName'] ?? data['email'] ?? '';
+                          return name
+                              .toLowerCase()
+                              .contains(_searchCtrl.text.toLowerCase());
                         });
 
                         if (filtered.isEmpty) {
@@ -148,14 +157,18 @@ class _MessagesPageState extends State<MessagesPage> {
                         }
 
                         return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 8, 16, 16),
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final doc = filtered.elementAt(i);
-                            final data = doc.data() as Map<String, dynamic>;
+                            final data =
+                                doc.data() as Map<String, dynamic>;
                             final uid = doc.id;
-                            final name = data['displayName'] ?? data['email'] ?? 'Unknown';
+                            final name =
+                                data['displayName'] ?? data['email'] ?? 'Unknown';
                             final avatar = data['avatar'];
                             final tid = _threadId(currentUser.uid, uid);
 
@@ -167,12 +180,16 @@ class _MessagesPageState extends State<MessagesPage> {
                                     ? AssetImage('assets/avatars/$avatar')
                                     : null,
                                 child: avatar == null
-                                    ? const Icon(Icons.person, color: Colors.white)
+                                    ? const Icon(Icons.person,
+                                        color: Colors.white)
                                     : null,
                               ),
-                              title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              title: Text(name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
                               subtitle: const Text("แตะเพื่อเริ่มแชท",
-                                  style: TextStyle(color: Color(0xFF707070))),
+                                  style:
+                                      TextStyle(color: Color(0xFF707070))),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => context.push('/chat/$tid'),
                             );
@@ -184,28 +201,37 @@ class _MessagesPageState extends State<MessagesPage> {
                   : StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('chats')
-                          .where('participants', arrayContains: currentUser.uid)
-                          .orderBy('updatedAt', descending: true)
+                          .where('participants',
+                              arrayContains: currentUser.uid)
                           .snapshots(),
                       builder: (context, chatSnap) {
-                        if (chatSnap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (chatSnap.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
                         }
-                        if (!chatSnap.hasData || chatSnap.data!.docs.isEmpty) {
-                          return const Center(child: Text("ยังไม่มีการสนทนา"));
+                        if (!chatSnap.hasData ||
+                            chatSnap.data!.docs.isEmpty) {
+                          return const Center(
+                              child: Text("ยังไม่มีการสนทนา"));
                         }
 
                         final chatDocs = chatSnap.data!.docs;
 
                         return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 8, 16, 16),
                           itemCount: chatDocs.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final chat = chatDocs[i];
-                            final data = chat.data() as Map<String, dynamic>;
-                            final participants = List<String>.from(data['participants'] ?? []);
-                            if (participants.length < 2) return const SizedBox();
+                            final data =
+                                chat.data() as Map<String, dynamic>;
+                            final participants =
+                                List<String>.from(data['participants'] ?? []);
+                            if (participants.length < 2)
+                              return const SizedBox();
 
                             final otherUid = participants.firstWhere(
                               (id) => id != currentUser.uid,
@@ -214,56 +240,79 @@ class _MessagesPageState extends State<MessagesPage> {
                             if (otherUid.isEmpty) return const SizedBox();
 
                             return FutureBuilder<DocumentSnapshot>(
-                              future: FirebaseFirestore.instance.collection('users').doc(otherUid).get(),
+                              future: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(otherUid)
+                                  .get(),
                               builder: (context, userSnap) {
-                                if (!userSnap.hasData || !userSnap.data!.exists) {
+                                if (!userSnap.hasData ||
+                                    !userSnap.data!.exists) {
                                   return const SizedBox();
                                 }
-                                final udata = userSnap.data!.data() as Map<String, dynamic>;
-                                final name = udata['displayName'] ?? udata['email'] ?? 'Unknown';
+                                final udata = userSnap.data!.data()
+                                    as Map<String, dynamic>;
+                                final name = udata['displayName'] ??
+                                    udata['email'] ??
+                                    'Unknown';
                                 final avatar = udata['avatar'];
-                                final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
 
                                 return StreamBuilder<QuerySnapshot>(
                                   stream: FirebaseFirestore.instance
                                       .collection('chats')
                                       .doc(chat.id)
                                       .collection('messages')
-                                      .orderBy('createdAt', descending: true)
+                                      .orderBy('createdAt',
+                                          descending: true)
                                       .limit(1)
                                       .snapshots(),
                                   builder: (_, msgSnap) {
                                     String lastText = "ยังไม่มีข้อความ";
-                                    if (msgSnap.hasData && msgSnap.data!.docs.isNotEmpty) {
-                                      final last = msgSnap.data!.docs.first.data() as Map<String, dynamic>;
+                                    String timeText = "";
+                                    if (msgSnap.hasData &&
+                                        msgSnap.data!.docs.isNotEmpty) {
+                                      final last = msgSnap.data!.docs.first
+                                          .data() as Map<String, dynamic>;
                                       lastText = last['text'] ?? '';
+                                      final ts = last['createdAt'];
+                                      if (ts is Timestamp) {
+                                        timeText =
+                                            _formatTime(ts.toDate());
+                                      }
                                     }
 
                                     return ListTile(
                                       leading: CircleAvatar(
                                         radius: 22,
-                                        backgroundColor: const Color(0xFFD9FFEE),
+                                        backgroundColor:
+                                            const Color(0xFFD9FFEE),
                                         backgroundImage: avatar != null
-                                            ? AssetImage('assets/avatars/$avatar')
+                                            ? AssetImage(
+                                                'assets/avatars/$avatar')
                                             : null,
                                         child: avatar == null
-                                            ? const Icon(Icons.person, color: Colors.white)
+                                            ? const Icon(Icons.person,
+                                                color: Colors.white)
                                             : null,
                                       ),
                                       title: Text(name,
-                                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                                          style: const TextStyle(
+                                              fontWeight:
+                                                  FontWeight.w700)),
                                       subtitle: Text(
                                         lastText,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Color(0xFF707070)),
+                                        style: const TextStyle(
+                                            color: Color(0xFF707070)),
                                       ),
                                       trailing: Text(
-                                        updatedAt != null ? _formatTime(updatedAt) : "",
+                                        timeText,
                                         style: const TextStyle(
-                                            color: Color(0xFF9CA3AF), fontSize: 12),
+                                            color: Color(0xFF9CA3AF),
+                                            fontSize: 12),
                                       ),
-                                      onTap: () => context.push('/chat/${chat.id}'),
+                                      onTap: () =>
+                                          context.push('/chat/${chat.id}'),
                                     );
                                   },
                                 );
@@ -304,7 +353,8 @@ class _TabButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        padding:
+            const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -313,7 +363,8 @@ class _TabButton extends StatelessWidget {
               children: [
                 Text(
                   text,
-                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: color),
                 ),
                 if (trailingDot) ...[
                   const SizedBox(width: 6),
