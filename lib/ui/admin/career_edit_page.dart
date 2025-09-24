@@ -1,6 +1,7 @@
+// lib/ui/admin/career_edit_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'career_mock.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CareerEditPage extends StatefulWidget {
   const CareerEditPage({super.key, required this.careerId});
@@ -12,39 +13,40 @@ class CareerEditPage extends StatefulWidget {
 
 class _CareerEditPageState extends State<CareerEditPage> {
   static const _primary = Color(0xFF3D5CFF);
-  static const _border  = Color(0xFFEFF1F7);
+  static const _border = Color(0xFFEFF1F7);
 
   final _form = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  String? _skillReq;
-
-  final _skills = const [
-    'Digital Communication',
-    'Programming',
-    'Calculus',
-    'Math',
-    'Data Analysis',
-  ];
-
-  Career? _current;
+  final _nameTh = TextEditingController();
+  final _nameEn = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _current = CareerStore.byId(widget.careerId);
-    if (_current != null) {
-      _name.text = _current!.name;
-      _skillReq = _current!.skillRequirement;
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('careers')
+        .doc(widget.careerId)
+        .get();
+    if (doc.exists) {
+      final data = doc.data()!;
+      _nameTh.text = data['name_th'] ?? '';
+      _nameEn.text = data['name_en'] ?? '';
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
-    _name.dispose();
+    _nameTh.dispose();
+    _nameEn.dispose();
     super.dispose();
   }
 
-  InputDecoration _deco() => InputDecoration(
+  InputDecoration _deco({String? hint}) => InputDecoration(
+        hintText: hint,
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
@@ -53,26 +55,33 @@ class _CareerEditPageState extends State<CareerEditPage> {
         ),
       );
 
-  void _submit() {
-    final ok = _form.currentState?.validate() ?? false;
-    if (!ok || _skillReq == null) return;
+  Future<void> _submit() async {
+    if (!(_form.currentState?.validate() ?? false)) return;
 
-    final updated = _current!.copyWith(
-      name: _name.text.trim(),
-      skillRequirement: _skillReq!,
-    );
-    CareerStore.upsert(updated);
+    await FirebaseFirestore.instance
+        .collection('careers')
+        .doc(widget.careerId)
+        .update({
+      'name_th': _nameTh.text.trim(),
+      'name_en': _nameEn.text.trim(),
+    });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved (mock)')),
+      const SnackBar(content: Text('Career updated')),
     );
     context.go('/admin/config/careers');
   }
 
-  void _delete() {
-    CareerStore.delete(widget.careerId);
+  Future<void> _delete() async {
+    await FirebaseFirestore.instance
+        .collection('careers')
+        .doc(widget.careerId)
+        .delete();
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Deleted (mock)')),
+      const SnackBar(content: Text('Career deleted')),
     );
     context.go('/admin/config/careers');
   }
@@ -98,29 +107,25 @@ class _CareerEditPageState extends State<CareerEditPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Career name",
+              const Text("Career name (TH)",
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               TextFormField(
-                controller: _name,
+                controller: _nameTh,
                 decoration: _deco(),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              const Text("Skill Requirement",
+              const Text("Career name (EN)",
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _skillReq,
+              TextFormField(
+                controller: _nameEn,
                 decoration: _deco(),
-                items: _skills
-                    .map((e) =>
-                        DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (v) => setState(() => _skillReq = v),
-                validator: (v) => v == null ? 'Required' : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 20),
 
@@ -136,7 +141,7 @@ class _CareerEditPageState extends State<CareerEditPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Submit'),
+                  child: const Text('Save'),
                 ),
               ),
               const SizedBox(height: 12),

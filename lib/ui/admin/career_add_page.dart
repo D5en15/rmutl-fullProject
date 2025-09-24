@@ -1,6 +1,7 @@
+// lib/ui/admin/career_add_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'career_mock.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CareerAddPage extends StatefulWidget {
   const CareerAddPage({super.key});
@@ -11,49 +12,41 @@ class CareerAddPage extends StatefulWidget {
 
 class _CareerAddPageState extends State<CareerAddPage> {
   static const _primary = Color(0xFF3D5CFF);
-  static const _border  = Color(0xFFEFF1F7);
+  static const _border = Color(0xFFEFF1F7);
 
   final _form = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  String? _skillReq;
-
-  final _skills = const [
-    'Digital Communication',
-    'Programming',
-    'Calculus',
-    'Math',
-    'Data Analysis',
-  ];
+  final _nameTh = TextEditingController();
+  final _nameEn = TextEditingController();
 
   @override
   void dispose() {
-    _name.dispose();
+    _nameTh.dispose();
+    _nameEn.dispose();
     super.dispose();
   }
 
-  InputDecoration _deco() => InputDecoration(
+  InputDecoration _deco() => const InputDecoration(
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: _border),
         ),
       );
 
-  void _submit() {
-    final ok = _form.currentState?.validate() ?? false;
-    if (!ok || _skillReq == null) return;
+  Future<void> _submit() async {
+    if (!(_form.currentState?.validate() ?? false)) return;
 
-    final c = Career(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _name.text.trim(),
-      skillRequirement: _skillReq!,
-    );
-    CareerStore.upsert(c);
+    await FirebaseFirestore.instance.collection('careers').add({
+      'name_th': _nameTh.text.trim(),
+      'name_en': _nameEn.text.trim(),
+    });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Added (mock)')),
+      const SnackBar(content: Text('Career added')),
     );
+
     context.go('/admin/config/careers');
   }
 
@@ -78,29 +71,25 @@ class _CareerAddPageState extends State<CareerAddPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Career name",
+              const Text("Career name (TH)",
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               TextFormField(
-                controller: _name,
+                controller: _nameTh,
                 decoration: _deco(),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 16),
 
-              const Text("Skill Requirement",
+              const Text("Career name (EN)",
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                value: _skillReq,
+              TextFormField(
+                controller: _nameEn,
                 decoration: _deco(),
-                items: _skills
-                    .map((e) =>
-                        DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (v) => setState(() => _skillReq = v),
-                validator: (v) => v == null ? 'Required' : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 24),
 
