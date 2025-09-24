@@ -1,5 +1,8 @@
+// lib/ui/student/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class StudentHomePage extends StatelessWidget {
   const StudentHomePage({super.key});
@@ -63,66 +66,84 @@ class _HeaderWithFloatingGpa extends StatelessWidget {
 class _BlueHeader extends StatelessWidget {
   const _BlueHeader();
 
+  String get _uid => FirebaseAuth.instance.currentUser!.uid;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 170, // จะลด/เพิ่มได้ตามชอบ
+      height: 170,
       decoration: const BoxDecoration(color: StudentHomePage._primary),
-      // เว้นระยะด้านบนล่างให้พอดี
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 🔔 กระดิ่ง (ซ้าย)
-          InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: () => context.go('/student/notifications'),
-            child: const Padding(
-            padding: EdgeInsets.all(4.0),
-           child: Icon(Icons.notifications_none_rounded,
-              color: Colors.white, size: 30),
-            ),
-          ),
-          const SizedBox(width: 12),
+      child: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator(color: Colors.white));
+          }
+          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
+          final user = FirebaseAuth.instance.currentUser;
+          final username = data['username'] ?? user?.displayName ?? 'Student';
+          final photoUrl = data['avatar'] as String?;
 
-          // 👋 กลาง: Hi, Smith + subtitle (จัดกึ่งกลางแนวตั้ง)
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Hi, Smith',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 🔔 Notifications
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () => context.go('/student/notifications'),
+                child: const Padding(
+                  padding: EdgeInsets.all(4.0),
+                  child: Icon(Icons.notifications_none_rounded,
+                      color: Colors.white, size: 30),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  "Let's start learning",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(width: 12),
+
+              // 👋 Username
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Hi, $username',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      "Let's start learning",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
 
-          const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-          // 👤 Avatar (ขวา)
-          const CircleAvatar(
-            radius: 22,
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, color: Colors.black54, size: 22),
-          ),
-        ],
+              // 👤 Avatar
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white,
+                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                    ? NetworkImage(photoUrl)
+                    : null,
+                child: (photoUrl == null || photoUrl.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.black54, size: 22)
+                    : null,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
-
 
 /// -----------------------------------------------------------------
 /// 🧾 GPA card (ลอยคาบขอบ)
@@ -130,84 +151,145 @@ class _BlueHeader extends StatelessWidget {
 class _GpaCompactCard extends StatelessWidget {
   const _GpaCompactCard();
 
+  double _gradeToPoint(String grade) {
+    switch (grade) {
+      case 'A':
+        return 4.0;
+      case 'B+':
+        return 3.5;
+      case 'B':
+        return 3.0;
+      case 'C+':
+        return 2.5;
+      case 'C':
+        return 2.0;
+      case 'D+':
+        return 1.5;
+      case 'D':
+        return 1.0;
+      case 'F':
+        return 0.0;
+      default:
+        return -1; // W, I, S, U, AU → ไม่คิด
+    }
+  }
+
+  Future<double> _calculateGpa(String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('subjects')
+        .get();
+
+    double totalPoints = 0;
+    double totalCredits = 0;
+
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final grade = data['grade'] as String? ?? '';
+      final creditsText =
+          (data['credits'] as String? ?? '0').split('(').first.trim();
+      final credits = double.tryParse(creditsText) ?? 0;
+
+      final point = _gradeToPoint(grade);
+      if (point >= 0) {
+        totalPoints += point * credits;
+        totalCredits += credits;
+      }
+    }
+
+    return totalCredits > 0 ? totalPoints / totalCredits : 0.0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    const gpa = 3.42;
-    const maxGpa = 4.00;
-    final value = (gpa / maxGpa).clamp(0.0, 1.0);
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return PhysicalModel(
-      color: Colors.white,
-      elevation: 10,
-      shadowColor: Colors.black12,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
+    return FutureBuilder<double>(
+      future: _calculateGpa(uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final gpa = snapshot.data!;
+        final maxGpa = 4.0;
+        final value = (gpa / maxGpa).clamp(0.0, 1.0);
+
+        return PhysicalModel(
           color: Colors.white,
+          elevation: 10,
+          shadowColor: Colors.black12,
           borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Expanded(
-                  child: Text(
-                    'Grade point average',
-                    style: TextStyle(fontSize: 12.5, color: Colors.black54),
-                  ),
-                ),
-                InkWell(
-                  onTap: () => context.go('/student/subjects'),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: StudentHomePage._bgSoft,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'My Subject',
-                      style: TextStyle(
-                        color: StudentHomePage._primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Grade point average',
+                        style: TextStyle(fontSize: 12.5, color: Colors.black54),
                       ),
                     ),
+                    InkWell(
+                      onTap: () => context.go('/student/subjects'),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: StudentHomePage._bgSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'My Subject',
+                          style: TextStyle(
+                            color: StudentHomePage._primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(gpa.toStringAsFixed(2),
+                        style: const TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 6),
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 2),
+                      child:
+                          Text('/ 4.00', style: TextStyle(color: Colors.black45)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    minHeight: 6,
+                    value: value,
+                    backgroundColor: const Color(0xFFF3E8E4),
+                    valueColor:
+                        const AlwaysStoppedAnimation(StudentHomePage._accentOrange),
                   ),
-                )
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: const [
-                Text('3.42',
-                    style:
-                        TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-                SizedBox(width: 6),
-                Padding(
-                  padding: EdgeInsets.only(bottom: 2),
-                  child: Text('/ 4.00', style: TextStyle(color: Colors.black45)),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                minHeight: 6,
-                value: value,
-                backgroundColor: const Color(0xFFF3E8E4),
-                valueColor: const AlwaysStoppedAnimation(
-                    StudentHomePage._accentOrange),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -218,78 +300,130 @@ class _GpaCompactCard extends StatelessWidget {
 class _GradeProgressCard extends StatelessWidget {
   const _GradeProgressCard();
 
+  double _gradeToPoint(String grade) {
+    switch (grade) {
+      case 'A':
+        return 4.0;
+      case 'B+':
+        return 3.5;
+      case 'B':
+        return 3.0;
+      case 'C+':
+        return 2.5;
+      case 'C':
+        return 2.0;
+      case 'D+':
+        return 1.5;
+      case 'D':
+        return 1.0;
+      case 'F':
+        return 0.0;
+      default:
+        return -1;
+    }
+  }
+
+  Future<Map<String, double>> _calculateGpaBySemester(String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('subjects')
+        .get();
+
+    final Map<String, List<double>> semPoints = {};
+    final Map<String, List<double>> semCredits = {};
+
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final grade = data['grade'] as String? ?? '';
+      final semester = data['semester'] as String? ?? '';
+      final creditsText =
+          (data['credits'] as String? ?? '0').split('(').first.trim();
+      final credits = double.tryParse(creditsText) ?? 0;
+
+      final point = _gradeToPoint(grade);
+      if (point >= 0) {
+        semPoints.putIfAbsent(semester, () => []);
+        semCredits.putIfAbsent(semester, () => []);
+        semPoints[semester]!.add(point * credits);
+        semCredits[semester]!.add(credits);
+      }
+    }
+
+    final Map<String, double> semGpa = {};
+    semPoints.forEach((sem, pts) {
+      final totalPts = pts.fold(0.0, (a, b) => a + b);
+      final totalCrd = semCredits[sem]!.fold(0.0, (a, b) => a + b);
+      semGpa[sem] = totalCrd > 0 ? totalPts / totalCrd : 0.0;
+    });
+
+    return semGpa;
+  }
+
   @override
   Widget build(BuildContext context) {
-    const data = [2.0, 2.0, 2.8, 3.2, 3.0, 4.0]; // S1..S6
+    final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: PhysicalModel(
-        color: Colors.white,
-        elevation: 3,
-        shadowColor: Colors.black12,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          decoration: BoxDecoration(
+    return FutureBuilder<Map<String, double>>(
+      future: _calculateGpaBySemester(uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final semGpa = snapshot.data!;
+        final semesters = semGpa.keys.toList()..sort();
+        final values = semesters.map((s) => semGpa[s] ?? 0.0).toList();
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: PhysicalModel(
             color: Colors.white,
+            elevation: 3,
+            shadowColor: Colors.black12,
             borderRadius: BorderRadius.circular(18),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Text('Grade progress',
-                        style:
-                            TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                  Row(
+                    children: const [
+                      Expanded(
+                        child: Text('Grade progress',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 18)),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: StudentHomePage._bgSoft,
-                      borderRadius: BorderRadius.circular(18),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'GPA by semester',
+                    style: TextStyle(color: StudentHomePage._muted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 170,
+                    width: double.infinity,
+                    child: CustomPaint(
+                      painter: _LineChartPainter(values),
                     ),
-                    child: const Text(
-                      '3.42  +0.12',
-                      style: TextStyle(
-                          color: StudentHomePage._primary,
-                          fontWeight: FontWeight.w700),
-                    ),
-                  )
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children:
+                        semesters.map((s) => _AxisLabel(s)).toList(),
+                  ),
                 ],
               ),
-              const SizedBox(height: 2),
-              const Text(
-                'GPA by semester',
-                style: TextStyle(color: StudentHomePage._muted, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 170,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _LineChartPainter(data),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  _AxisLabel('S1'),
-                  _AxisLabel('S2'),
-                  _AxisLabel('S3'),
-                  _AxisLabel('S4'),
-                  _AxisLabel('S5'),
-                  _AxisLabel('S6'),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -299,11 +433,8 @@ class _AxisLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style:
-            const TextStyle(color: StudentHomePage._muted, fontSize: 12),
-      );
+  Widget build(BuildContext context) =>
+      Text(text, style: const TextStyle(color: StudentHomePage._muted, fontSize: 12));
 }
 
 class _LineChartPainter extends CustomPainter {
@@ -312,12 +443,9 @@ class _LineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final grid =
-        Paint()..color = const Color(0xFFEFF1F7)..strokeWidth = 1;
-    final border =
-        Paint()..color = const Color(0xFFE1E3EC)..strokeWidth = 1;
+    final grid = Paint()..color = const Color(0xFFEFF1F7)..strokeWidth = 1;
+    final border = Paint()..color = const Color(0xFFE1E3EC)..strokeWidth = 1;
 
-    // grid y lines
     const steps = 4;
     for (var i = 0; i <= steps; i++) {
       final y = size.height * (i / steps);
@@ -326,7 +454,7 @@ class _LineChartPainter extends CustomPainter {
     }
 
     const maxY = 4.0, minY = 0.0;
-    final dx = size.width / (data.length - 1);
+    final dx = data.length > 1 ? size.width / (data.length - 1) : size.width;
     final path = Path();
     final line = Paint()
       ..color = StudentHomePage._primary
@@ -354,7 +482,7 @@ class _LineChartPainter extends CustomPainter {
 }
 
 /// -----------------------------------------------------------------
-/// 🔥 Top strength chip
+/// 🔥 Top strength chip (mock ไว้ก่อน)
 /// -----------------------------------------------------------------
 class _TopStrengthChip extends StatelessWidget {
   const _TopStrengthChip();
@@ -388,91 +516,150 @@ class _TopStrengthChip extends StatelessWidget {
 }
 
 /// -----------------------------------------------------------------
-/// 🧠 Skill strengths
+/// 🧠 Skill strengths (real from Firestore)
 /// -----------------------------------------------------------------
 class _SkillStrengths extends StatelessWidget {
   const _SkillStrengths();
 
-  @override
-  Widget build(BuildContext context) {
-    final skills = <(String, int)>[
-      ('Data Analysis', 86),
-      ('Machine Learning', 75),
-      ('Mathematics', 64),
-      ('Programming', 60),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: PhysicalModel(
-        color: Colors.white,
-        elevation: 2,
-        shadowColor: Colors.black12,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Skill strengths',
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
-              ...skills
-                  .map((e) => _SkillBar(title: e.$1, percent: e.$2))
-                  .expand((w) => [w, const SizedBox(height: 8)])
-                  .toList()
-                ..removeLast(),
-            ],
-          ),
-        ),
-      ),
-    );
+  double _gradeToPoint(String grade) {
+    switch (grade) {
+      case 'A':
+        return 4.0;
+      case 'B+':
+        return 3.5;
+      case 'B':
+        return 3.0;
+      case 'C+':
+        return 2.5;
+      case 'C':
+        return 2.0;
+      case 'D+':
+        return 1.5;
+      case 'D':
+        return 1.0;
+      case 'F':
+        return 0.0;
+      default:
+        return -1; // W, I, S, U, AU → ไม่คิด
+    }
   }
-}
 
-class _SkillBar extends StatelessWidget {
-  const _SkillBar({required this.title, required this.percent});
-  final String title;
-  final int percent;
+  Future<List<Map<String, dynamic>>> _calculateSkillStrengths(String uid) async {
+    final userSubsSnap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('subjects')
+        .get();
+
+    Map<String, double> skillScores = {};
+    Map<String, double> skillMax = {};
+
+    for (var doc in userSubsSnap.docs) {
+      final data = doc.data();
+      final subjectId = data['subjectId'];
+      final grade = data['grade'] as String? ?? '';
+      final credits = (data['credits'] is int)
+          ? data['credits'].toDouble()
+          : double.tryParse(data['credits'].toString()) ?? 0;
+
+      final point = _gradeToPoint(grade);
+      if (point < 0) continue;
+
+      // ดึง mapping subject → skills
+      final mapDoc = await FirebaseFirestore.instance
+          .collection('subject_skill_map')
+          .doc(subjectId)
+          .get();
+
+      if (!mapDoc.exists) continue;
+      final skills = mapDoc.data()!['skills'] as List<dynamic>;
+
+      for (var s in skills) {
+        final skillId = s['skillId'];
+        final weight = (s['weight'] as num).toDouble();
+
+        final score = point * credits * weight;
+        skillScores[skillId] = (skillScores[skillId] ?? 0) + score;
+
+        // เก็บค่า max ที่เป็นไปได้ (4.0 × credits × weight)
+        final maxScore = 4.0 * credits * weight;
+        skillMax[skillId] = (skillMax[skillId] ?? 0) + maxScore;
+      }
+    }
+
+    // ดึงชื่อ skill จาก skills collection
+    List<Map<String, dynamic>> results = [];
+    for (var entry in skillScores.entries) {
+      final skillId = entry.key;
+      final score = entry.value;
+      final max = skillMax[skillId] ?? 1;
+
+      final skillDoc = await FirebaseFirestore.instance
+          .collection('skills')
+          .doc(skillId)
+          .get();
+      final skillName = skillDoc.data()?['name'] ?? skillId;
+
+      results.add({
+        'name': skillName,
+        'percent': ((score / max) * 100).clamp(0, 100),
+      });
+    }
+
+    // เรียงจากมากไปน้อย
+    results.sort((a, b) => (b['percent']).compareTo(a['percent']));
+    return results;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final value = percent / 100.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Expanded(
-            child: Text(title,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _calculateSkillStrengths(uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final skills = snapshot.data!;
+        if (skills.isEmpty) {
+          return const Center(child: Text("No skill data yet"));
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: PhysicalModel(
+            color: Colors.white,
+            elevation: 2,
+            shadowColor: Colors.black12,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Skill strengths',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+                  ...skills.map((e) => _SkillBar(
+                        title: e['name'],
+                        percent: (e['percent'] as double).round(),
+                      )),
+                ],
+              ),
+            ),
           ),
-          Text('$percent%'),
-        ]),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 8,
-            backgroundColor: const Color(0xFFE8EAFF),
-            valueColor: const AlwaysStoppedAnimation(
-                StudentHomePage._primary),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
 
 /// -----------------------------------------------------------------
-/// 💼 Recommended careers
+/// 💼 Recommended careers (mock ไว้ก่อน)
 /// -----------------------------------------------------------------
 class _RecommendedCareers extends StatelessWidget {
   const _RecommendedCareers();
@@ -531,7 +718,8 @@ class _CareerItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
@@ -562,7 +750,7 @@ class _CareerItem extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F2F6),
+                              color: Color(0xFFF1F2F6),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child:
@@ -591,6 +779,43 @@ class _CareerItem extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SkillBar extends StatelessWidget {
+  const _SkillBar({required this.title, required this.percent});
+  final String title;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = percent / 100.0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(
+              child: Text(title,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            Text('$percent%'),
+          ]),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: value,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFE8EAFF),
+              valueColor:
+                  const AlwaysStoppedAnimation(StudentHomePage._primary),
+            ),
+          ),
+        ],
       ),
     );
   }
