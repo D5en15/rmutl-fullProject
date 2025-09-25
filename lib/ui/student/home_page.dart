@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 class StudentHomePage extends StatelessWidget {
   const StudentHomePage({super.key});
@@ -52,12 +53,7 @@ class _HeaderWithFloatingGpa extends StatelessWidget {
       clipBehavior: Clip.none,
       children: const [
         _BlueHeader(),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: -86,
-          child: _GpaCompactCard(),
-        ),
+        Positioned(left: 16, right: 16, bottom: -86, child: _GpaCompactCard()),
       ],
     );
   }
@@ -75,10 +71,16 @@ class _BlueHeader extends StatelessWidget {
       decoration: const BoxDecoration(color: StudentHomePage._primary),
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
       child: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
+        stream:
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(_uid)
+                .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(color: Colors.white));
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
           }
           final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final user = FirebaseAuth.instance.currentUser;
@@ -94,8 +96,11 @@ class _BlueHeader extends StatelessWidget {
                 onTap: () => context.go('/student/notifications'),
                 child: const Padding(
                   padding: EdgeInsets.all(4.0),
-                  child: Icon(Icons.notifications_none_rounded,
-                      color: Colors.white, size: 30),
+                  child: Icon(
+                    Icons.notifications_none_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -130,12 +135,18 @@ class _BlueHeader extends StatelessWidget {
               CircleAvatar(
                 radius: 22,
                 backgroundColor: Colors.white,
-                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                    ? NetworkImage(photoUrl)
-                    : null,
-                child: (photoUrl == null || photoUrl.isEmpty)
-                    ? const Icon(Icons.person, color: Colors.black54, size: 22)
-                    : null,
+                backgroundImage:
+                    (photoUrl != null && photoUrl.isNotEmpty)
+                        ? NetworkImage(photoUrl)
+                        : null,
+                child:
+                    (photoUrl == null || photoUrl.isEmpty)
+                        ? const Icon(
+                          Icons.person,
+                          color: Colors.black54,
+                          size: 22,
+                        )
+                        : null,
               ),
             ],
           );
@@ -175,11 +186,12 @@ class _GpaCompactCard extends StatelessWidget {
   }
 
   Future<double> _calculateGpa(String uid) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('subjects')
-        .get();
+    final snap =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('subjects')
+            .get();
 
     double totalPoints = 0;
     double totalCredits = 0;
@@ -242,7 +254,9 @@ class _GpaCompactCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: StudentHomePage._bgSoft,
                           borderRadius: BorderRadius.circular(12),
@@ -256,21 +270,27 @@ class _GpaCompactCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(gpa.toStringAsFixed(2),
-                        style: const TextStyle(
-                            fontSize: 26, fontWeight: FontWeight.w800)),
+                    Text(
+                      gpa.toStringAsFixed(2),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(width: 6),
                     const Padding(
                       padding: EdgeInsets.only(bottom: 2),
-                      child:
-                          Text('/ 4.00', style: TextStyle(color: Colors.black45)),
+                      child: Text(
+                        '/ 4.00',
+                        style: TextStyle(color: Colors.black45),
+                      ),
                     ),
                   ],
                 ),
@@ -281,8 +301,9 @@ class _GpaCompactCard extends StatelessWidget {
                     minHeight: 6,
                     value: value,
                     backgroundColor: const Color(0xFFF3E8E4),
-                    valueColor:
-                        const AlwaysStoppedAnimation(StudentHomePage._accentOrange),
+                    valueColor: const AlwaysStoppedAnimation(
+                      StudentHomePage._accentOrange,
+                    ),
                   ),
                 ),
               ],
@@ -324,11 +345,12 @@ class _GradeProgressCard extends StatelessWidget {
   }
 
   Future<Map<String, double>> _calculateGpaBySemester(String uid) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('subjects')
-        .get();
+    final snap =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('subjects')
+            .get();
 
     final Map<String, List<double>> semPoints = {};
     final Map<String, List<double>> semCredits = {};
@@ -393,30 +415,34 @@ class _GradeProgressCard extends StatelessWidget {
                   Row(
                     children: const [
                       Expanded(
-                        child: Text('Grade progress',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w800, fontSize: 18)),
+                        child: Text(
+                          'Grade progress',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 2),
                   const Text(
                     'GPA by semester',
-                    style: TextStyle(color: StudentHomePage._muted, fontSize: 12),
+                    style: TextStyle(
+                      color: StudentHomePage._muted,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 170,
                     width: double.infinity,
-                    child: CustomPaint(
-                      painter: _LineChartPainter(values),
-                    ),
+                    child: CustomPaint(painter: _LineChartPainter(values)),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children:
-                        semesters.map((s) => _AxisLabel(s)).toList(),
+                    children: semesters.map((s) => _AxisLabel(s)).toList(),
                   ),
                 ],
               ),
@@ -433,8 +459,10 @@ class _AxisLabel extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) =>
-      Text(text, style: const TextStyle(color: StudentHomePage._muted, fontSize: 12));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(color: StudentHomePage._muted, fontSize: 12),
+  );
 }
 
 class _LineChartPainter extends CustomPainter {
@@ -443,23 +471,33 @@ class _LineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final grid = Paint()..color = const Color(0xFFEFF1F7)..strokeWidth = 1;
-    final border = Paint()..color = const Color(0xFFE1E3EC)..strokeWidth = 1;
+    final grid =
+        Paint()
+          ..color = const Color(0xFFEFF1F7)
+          ..strokeWidth = 1;
+    final border =
+        Paint()
+          ..color = const Color(0xFFE1E3EC)
+          ..strokeWidth = 1;
 
     const steps = 4;
     for (var i = 0; i <= steps; i++) {
       final y = size.height * (i / steps);
       canvas.drawLine(
-          Offset(0, y), Offset(size.width, y), i == steps ? border : grid);
+        Offset(0, y),
+        Offset(size.width, y),
+        i == steps ? border : grid,
+      );
     }
 
     const maxY = 4.0, minY = 0.0;
     final dx = data.length > 1 ? size.width / (data.length - 1) : size.width;
     final path = Path();
-    final line = Paint()
-      ..color = StudentHomePage._primary
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+    final line =
+        Paint()
+          ..color = StudentHomePage._primary
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke;
     final dot = Paint()..color = StudentHomePage._primary;
 
     for (var i = 0; i < data.length; i++) {
@@ -482,150 +520,190 @@ class _LineChartPainter extends CustomPainter {
 }
 
 /// -----------------------------------------------------------------
-/// 🔥 Top strength chip (mock ไว้ก่อน)
+/// 🔥 Top strength chip (real, from strongest skill description)
 /// -----------------------------------------------------------------
 class _TopStrengthChip extends StatelessWidget {
   const _TopStrengthChip();
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: StudentHomePage._bgSoft,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.local_fire_department_outlined,
-                color: StudentHomePage._primary),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Top strength: Data Analysis 86%',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+  Future<String?> _getTopSkillDescription(String uid) async {
+    final fs = FirebaseFirestore.instance;
 
-/// -----------------------------------------------------------------
-/// 🧠 Skill strengths (real from Firestore)
-/// -----------------------------------------------------------------
-class _SkillStrengths extends StatelessWidget {
-  const _SkillStrengths();
+    // ใช้ _SkillStrengths._loadSkillStrengths() ดึงผลการคำนวณ
+    final skillHelper = _SkillStrengths();
+    final result = await skillHelper._loadSkillStrengths(uid);
+    final skills = (result['skills'] as List).cast<Map<String, dynamic>>();
 
-  double _gradeToPoint(String grade) {
-    switch (grade) {
-      case 'A':
-        return 4.0;
-      case 'B+':
-        return 3.5;
-      case 'B':
-        return 3.0;
-      case 'C+':
-        return 2.5;
-      case 'C':
-        return 2.0;
-      case 'D+':
-        return 1.5;
-      case 'D':
-        return 1.0;
-      case 'F':
-        return 0.0;
-      default:
-        return -1; // W, I, S, U, AU → ไม่คิด
-    }
-  }
+    if (skills.isEmpty) return null;
 
-  Future<List<Map<String, dynamic>>> _calculateSkillStrengths(String uid) async {
-    final userSubsSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('subjects')
-        .get();
+    // ดึง skill ที่แข็งแรงที่สุด
+    final top = skills.first;
 
-    Map<String, double> skillScores = {};
-    Map<String, double> skillMax = {};
-
-    for (var doc in userSubsSnap.docs) {
-      final data = doc.data();
-      final subjectId = data['subjectId'];
-      final grade = data['grade'] as String? ?? '';
-      final credits = (data['credits'] is int)
-          ? data['credits'].toDouble()
-          : double.tryParse(data['credits'].toString()) ?? 0;
-
-      final point = _gradeToPoint(grade);
-      if (point < 0) continue;
-
-      // ดึง mapping subject → skills
-      final mapDoc = await FirebaseFirestore.instance
-          .collection('subject_skill_map')
-          .doc(subjectId)
-          .get();
-
-      if (!mapDoc.exists) continue;
-      final skills = mapDoc.data()!['skills'] as List<dynamic>;
-
-      for (var s in skills) {
-        final skillId = s['skillId'];
-        final weight = (s['weight'] as num).toDouble();
-
-        final score = point * credits * weight;
-        skillScores[skillId] = (skillScores[skillId] ?? 0) + score;
-
-        // เก็บค่า max ที่เป็นไปได้ (4.0 × credits × weight)
-        final maxScore = 4.0 * credits * weight;
-        skillMax[skillId] = (skillMax[skillId] ?? 0) + maxScore;
-      }
-    }
-
-    // ดึงชื่อ skill จาก skills collection
-    List<Map<String, dynamic>> results = [];
-    for (var entry in skillScores.entries) {
-      final skillId = entry.key;
-      final score = entry.value;
-      final max = skillMax[skillId] ?? 1;
-
-      final skillDoc = await FirebaseFirestore.instance
-          .collection('skills')
-          .doc(skillId)
-          .get();
-      final skillName = skillDoc.data()?['name'] ?? skillId;
-
-      results.add({
-        'name': skillName,
-        'percent': ((score / max) * 100).clamp(0, 100),
-      });
-    }
-
-    // เรียงจากมากไปน้อย
-    results.sort((a, b) => (b['percent']).compareTo(a['percent']));
-    return results;
+    // ถ้ามี description ใช้เลย ถ้าไม่มี fallback เป็น name
+    return (top['description'] != null && (top['description'] as String).trim().isNotEmpty)
+        ? top['description'] as String
+        : top['name'] as String;
   }
 
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
 
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _calculateSkillStrengths(uid),
+    return FutureBuilder<String?>(
+      future: _getTopSkillDescription(uid),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final topSkillDesc = snapshot.data;
+        if (topSkillDesc == null) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: StudentHomePage._bgSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.local_fire_department_outlined,
+                    color: StudentHomePage._primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Top strength: $topSkillDesc',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// -----------------------------------------------------------------
+/// 🧠 Skill strengths (real from Firestore via subplo → skills) + DEBUG
+/// -----------------------------------------------------------------
+class _SkillStrengths extends StatelessWidget {
+  const _SkillStrengths();
+
+  // เกรด → คะแนนถ่วงน้ำหนัก
+  double _gradeToPoint(String grade) {
+    switch (grade) {
+      case 'A': return 4.0;
+      case 'B+': return 3.5;
+      case 'B': return 3.0;
+      case 'C+': return 2.5;
+      case 'C': return 2.0;
+      case 'D+': return 1.5;
+      case 'D': return 1.0;
+      case 'F': return 0.0;
+      default:  return -1; // W, I, S, U, AU → ไม่คิด
+    }
+  }
+
+  // parse credits เช่น "3(2-3-5)" หรือ 3
+  double _parseCredits(dynamic raw) {
+    if (raw == null) return 0;
+    if (raw is num) return raw.toDouble();
+    final s = raw.toString();
+    final head = s.split('(').first.trim();
+    return double.tryParse(head) ?? 0;
+  }
+
+  Future<Map<String, dynamic>> _loadSkillStrengths(String uid) async {
+    final fs = FirebaseFirestore.instance;
+    final userSubsSnap = await fs.collection('users').doc(uid).collection('subjects').get();
+
+    final Map<String, double> skillScores = {};
+    final Map<String, double> skillMax = {};
+    final Set<String> rawSubplos = {};
+
+    for (final doc in userSubsSnap.docs) {
+      final data = doc.data();
+      final subjectId = data['subjectId'] as String?;
+      final grade = (data['grade'] as String? ?? '').trim();
+      final credits = _parseCredits(data['credits']);
+      final point = _gradeToPoint(grade);
+
+      if (subjectId == null || point < 0) continue;
+
+      final subjectDoc = await fs.collection('subjects').doc(subjectId).get();
+      final raw = subjectDoc.data()?['subplo'];
+
+      final List<String> subplos = <String>[];
+      if (raw is List) {
+        for (final e in raw) {
+          if (e is String && e.trim().isNotEmpty) subplos.add(e.trim());
+          else if (e is Map<String, dynamic>) {
+            final id = (e['id'] ?? e['name'] ?? '').toString().trim();
+            if (id.isNotEmpty) subplos.add(id);
+          }
+        }
+      }
+      rawSubplos.addAll(subplos);
+
+      for (final sp in subplos) {
+        final skillSnap = await fs.collection('skills').where('name', isEqualTo: sp).limit(1).get();
+
+        if (skillSnap.docs.isEmpty) {
+          final score = point * credits;
+          final maxScore = 4.0 * credits;
+          skillScores[sp] = (skillScores[sp] ?? 0) + score;
+          skillMax[sp] = (skillMax[sp] ?? 0) + maxScore;
+          continue;
+        }
+
+        final sd = skillSnap.docs.first.data();
+        final skillName = (sd['name']?.toString() ?? sp).trim();
+        final skillDesc = (sd['description']?.toString() ?? skillName).trim();
+
+        final score = point * credits;
+        final maxScore = 4.0 * credits;
+
+        skillScores[skillDesc] = (skillScores[skillDesc] ?? 0) + score;
+        skillMax[skillDesc]   = (skillMax[skillDesc]   ?? 0) + maxScore;
+      }
+    }
+
+    final List<Map<String, dynamic>> results = [];
+    skillScores.forEach((desc, score) {
+      final max = (skillMax[desc] ?? 1);
+      final percent = ((score / max) * 100).clamp(0, 100);
+      results.add({
+        'name': desc,
+        'description': desc,
+        'percent': percent,
+      });
+    });
+    results.sort((a, b) => (b['percent'] as double).compareTo(a['percent'] as double));
+
+    return {
+      'skills': results.take(5).toList(),
+      'rawSubplos': rawSubplos.toList()..sort(),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadSkillStrengths(uid),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final skills = snapshot.data!;
-        if (skills.isEmpty) {
-          return const Center(child: Text("No skill data yet"));
-        }
+        final data = snapshot.data!;
+        final List<Map<String, dynamic>> skills = (data['skills'] as List).cast<Map<String, dynamic>>();
+        final List<String> rawSubplos = (data['rawSubplos'] as List).cast<String>();
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -639,15 +717,34 @@ class _SkillStrengths extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Skill strengths',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
+                  const Text('Skill strengths', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                   const SizedBox(height: 10),
-                  ...skills.map((e) => _SkillBar(
-                        title: e['name'],
-                        percent: (e['percent'] as double).round(),
-                      )),
+
+                  if (skills.isNotEmpty) ...[
+                    ...skills.map((e) => _SkillBar(
+                          title: (e['description'] as String?) ?? e['name'] as String,
+                          percent: (e['percent'] as double).round(),
+                        )),
+                  ] else ...[
+                    const Text('Detected skills from enrolled subjects:', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    ...List.generate(rawSubplos.length, (i) {
+                      final idx = i + 1;
+                      final name = rawSubplos[i];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Text('$idx.', style: const TextStyle(color: Colors.black54)),
+                            const SizedBox(width: 8),
+                            Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      );
+                    }),
+                    if (rawSubplos.isEmpty)
+                      const Text('No skill data yet', style: TextStyle(color: Colors.black54)),
+                  ],
                 ],
               ),
             ),
@@ -737,35 +834,43 @@ class _CareerItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
                     runSpacing: -6,
-                    children: tags
-                        .map(
-                          (t) => Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Color(0xFFF1F2F6),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child:
-                                Text(t, style: const TextStyle(fontSize: 12)),
-                          ),
-                        )
-                        .toList(),
+                    children:
+                        tags
+                            .map(
+                              (t) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFF1F2F6),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  t,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            )
+                            .toList(),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: StudentHomePage._bgSoft,
                 borderRadius: BorderRadius.circular(16),
@@ -773,8 +878,9 @@ class _CareerItem extends StatelessWidget {
               child: Text(
                 '$score%',
                 style: const TextStyle(
-                    color: StudentHomePage._primary,
-                    fontWeight: FontWeight.w700),
+                  color: StudentHomePage._primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -797,13 +903,17 @@ class _SkillBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text(title,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-            Text('$percent%'),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Text('$percent%'),
+            ],
+          ),
           const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -811,8 +921,9 @@ class _SkillBar extends StatelessWidget {
               value: value,
               minHeight: 8,
               backgroundColor: const Color(0xFFE8EAFF),
-              valueColor:
-                  const AlwaysStoppedAnimation(StudentHomePage._primary),
+              valueColor: const AlwaysStoppedAnimation(
+                StudentHomePage._primary,
+              ),
             ),
           ),
         ],

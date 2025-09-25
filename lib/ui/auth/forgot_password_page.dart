@@ -43,6 +43,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -71,6 +77,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
               controller: _emailCtrl,
@@ -91,7 +98,29 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ),
               child: _loading
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Reset Password", style: TextStyle(color: Colors.white)),
+                  : const Text(
+                      "Reset Password",
+                      style: TextStyle(color: Colors.white),
+                    ),
+            ),
+            const SizedBox(height: 16),
+
+            // 👇 เพิ่มส่วน "Remember your password?  Log in"
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  "Remember your password?  ",
+                  style: TextStyle(color: Colors.black54),
+                ),
+                TextButton(
+                  onPressed: () => context.go('/login'),
+                  child: const Text(
+                    "Log in",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
