@@ -19,6 +19,8 @@ class _CareerEditPageState extends State<CareerEditPage> {
   final _nameTh = TextEditingController();
   final _nameEn = TextEditingController();
 
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
@@ -27,15 +29,19 @@ class _CareerEditPageState extends State<CareerEditPage> {
 
   Future<void> _loadData() async {
     final doc = await FirebaseFirestore.instance
-        .collection('careers')
+        .collection('career')
         .doc(widget.careerId)
         .get();
+
     if (doc.exists) {
       final data = doc.data()!;
-      _nameTh.text = data['name_th'] ?? '';
-      _nameEn.text = data['name_en'] ?? '';
-      setState(() {});
+      _nameTh.text = data['career_thname'] ?? '';
+      _nameEn.text = data['career_enname'] ?? '';
     }
+
+    setState(() {
+      _loading = false;
+    });
   }
 
   @override
@@ -49,9 +55,9 @@ class _CareerEditPageState extends State<CareerEditPage> {
         hintText: hint,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: _border),
         ),
       );
 
@@ -59,29 +65,29 @@ class _CareerEditPageState extends State<CareerEditPage> {
     if (!(_form.currentState?.validate() ?? false)) return;
 
     await FirebaseFirestore.instance
-        .collection('careers')
-        .doc(widget.careerId)
+        .collection('career')
+        .doc(widget.careerId) // ✅ ใช้ career_id เดิมเป็น documentId
         .update({
-      'name_th': _nameTh.text.trim(),
-      'name_en': _nameEn.text.trim(),
+      'career_thname': _nameTh.text.trim(),
+      'career_enname': _nameEn.text.trim(),
     });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Career updated')),
+      const SnackBar(content: Text('✅ Career updated')),
     );
     context.go('/admin/config/careers');
   }
 
   Future<void> _delete() async {
     await FirebaseFirestore.instance
-        .collection('careers')
+        .collection('career')
         .doc(widget.careerId)
         .delete();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Career deleted')),
+      const SnackBar(content: Text('🗑️ Career deleted')),
     );
     context.go('/admin/config/careers');
   }
@@ -100,70 +106,72 @@ class _CareerEditPageState extends State<CareerEditPage> {
         foregroundColor: Colors.black87,
         elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: Form(
-          key: _form,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Career name (TH)",
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _nameTh,
-                decoration: _deco(),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-
-              const Text("Career name (EN)",
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _nameEn,
-                decoration: _deco(),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                height: 48,
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Form(
+                key: _form,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Career name (TH)",
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _nameTh,
+                      decoration: _deco(hint: "นักประกันคุณภาพซอฟต์แวร์"),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
-                  ),
-                  child: const Text('Save'),
+                    const SizedBox(height: 16),
+
+                    const Text("Career name (EN)",
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _nameEn,
+                      decoration: _deco(hint: "Software Quality Assurance"),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _delete,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE53935),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Delete'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 48,
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _delete,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Delete'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }

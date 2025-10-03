@@ -18,6 +18,8 @@ class _CareerAddPageState extends State<CareerAddPage> {
   final _nameTh = TextEditingController();
   final _nameEn = TextEditingController();
 
+  bool _loading = false;
+
   @override
   void dispose() {
     _nameTh.dispose();
@@ -25,26 +27,57 @@ class _CareerAddPageState extends State<CareerAddPage> {
     super.dispose();
   }
 
-  InputDecoration _deco() => const InputDecoration(
+  InputDecoration _deco({String? hint}) => InputDecoration(
+        hintText: hint,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
+        border: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide(color: _border),
         ),
       );
 
+  /// ✅ สร้าง career_id อัตโนมัติ
+  Future<String> _generateCareerId() async {
+    final snapshot =
+        await FirebaseFirestore.instance.collection('career').get();
+
+    if (snapshot.docs.isEmpty) {
+      return "cr01";
+    }
+
+    // หา career_id ล่าสุด (เรียงลำดับ)
+    final ids = snapshot.docs
+        .map((d) => d['career_id'] as String? ?? "")
+        .where((id) => id.startsWith("cr"))
+        .toList();
+
+    ids.sort();
+
+    final lastId = ids.isNotEmpty ? ids.last : "cr00";
+    final num = int.tryParse(lastId.replaceAll("cr", "")) ?? 0;
+    final nextNum = num + 1;
+    return "cr${nextNum.toString().padLeft(2, '0')}";
+  }
+
   Future<void> _submit() async {
     if (!(_form.currentState?.validate() ?? false)) return;
 
-    await FirebaseFirestore.instance.collection('careers').add({
-      'name_th': _nameTh.text.trim(),
-      'name_en': _nameEn.text.trim(),
+    setState(() => _loading = true);
+
+    final id = await _generateCareerId();
+
+    await FirebaseFirestore.instance.collection('career').doc(id).set({
+      'career_id': id,
+      'career_thname': _nameTh.text.trim(),
+      'career_enname': _nameEn.text.trim(),
     });
 
     if (!mounted) return;
+    setState(() => _loading = false);
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Career added')),
+      SnackBar(content: Text('✅ Career $id added')),
     );
 
     context.go('/admin/config/careers');
@@ -76,7 +109,7 @@ class _CareerAddPageState extends State<CareerAddPage> {
               const SizedBox(height: 6),
               TextFormField(
                 controller: _nameTh,
-                decoration: _deco(),
+                decoration: _deco(hint: "นักประกันคุณภาพซอฟต์แวร์"),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Required' : null,
               ),
@@ -87,7 +120,7 @@ class _CareerAddPageState extends State<CareerAddPage> {
               const SizedBox(height: 6),
               TextFormField(
                 controller: _nameEn,
-                decoration: _deco(),
+                decoration: _deco(hint: "Software Quality Assurance"),
                 validator: (v) =>
                     v == null || v.trim().isEmpty ? 'Required' : null,
               ),
@@ -97,7 +130,7 @@ class _CareerAddPageState extends State<CareerAddPage> {
                 height: 48,
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submit,
+                  onPressed: _loading ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _primary,
                     foregroundColor: Colors.white,
@@ -105,7 +138,10 @@ class _CareerAddPageState extends State<CareerAddPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Add'),
+                  child: _loading
+                      ? const CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2)
+                      : const Text('Add'),
                 ),
               ),
             ],

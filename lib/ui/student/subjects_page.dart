@@ -13,9 +13,69 @@ class SubjectsPage extends StatefulWidget {
 }
 
 class _SubjectsPageState extends State<SubjectsPage> {
-  String get _uid => FirebaseAuth.instance.currentUser!.uid;
-
+  String? _userId; // user_id จากตาราง user
   String _search = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserId();
+  }
+
+  Future<void> _loadUserId() async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (email == null) return;
+
+    final snap = await FirebaseFirestore.instance
+        .collection("user")
+        .where("user_email", isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isNotEmpty) {
+      setState(() {
+        _userId = snap.docs.first.data()["user_id"].toString();
+      });
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> _loadEnrollments() {
+    if (_userId == null) {
+      return const Stream.empty();
+    }
+
+    return FirebaseFirestore.instance
+        .collection("enrollment")
+        .where("user_id", isEqualTo: _userId)
+        .snapshots()
+        .asyncMap((enrollSnap) async {
+      List<Map<String, dynamic>> results = [];
+      for (var e in enrollSnap.docs) {
+        final enroll = e.data();
+        final subjectId = enroll["subject_id"];
+        if (subjectId == null) continue;
+
+        final subjDoc = await FirebaseFirestore.instance
+            .collection("subject")
+            .doc(subjectId)
+            .get();
+
+        if (subjDoc.exists) {
+          final subject = subjDoc.data()!;
+          results.add({
+            "id": e.id, // enrollment document id
+            "subject_id": subject["subject_id"],
+            "subject_thname": subject["subject_thname"],
+            "subject_enname": subject["subject_enname"],
+            "subject_credits": subject["subject_credits"],
+            "enrollment_semester": enroll["enrollment_semester"],
+            "enrollment_grade": enroll["enrollment_grade"],
+          });
+        }
+      }
+      return results;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,55 +109,51 @@ class _SubjectsPageState extends State<SubjectsPage> {
         ),
       ),
 
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(_uid)
-            .collection('subjects')
-            .orderBy('semester')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No subjects yet"));
-          }
+      body: _userId == null
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _loadEnrollments(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text("ยังไม่มีรายวิชา"));
+                }
 
-          final docs = snapshot.data!.docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final code = (data['code'] ?? '').toString().toLowerCase();
-            final nameTh = (data['name_th'] ?? '').toString().toLowerCase();
-            final nameEn = (data['name_en'] ?? '').toString().toLowerCase();
-            return code.contains(_search) ||
-                nameTh.contains(_search) ||
-                nameEn.contains(_search);
-          }).toList();
+                final docs = snapshot.data!.where((data) {
+                  final code = (data['subject_id'] ?? '').toString().toLowerCase();
+                  final nameTh = (data['subject_thname'] ?? '').toString().toLowerCase();
+                  final nameEn = (data['subject_enname'] ?? '').toString().toLowerCase();
+                  return code.contains(_search) ||
+                      nameTh.contains(_search) ||
+                      nameEn.contains(_search);
+                }).toList();
 
-          if (docs.isEmpty) {
-            return const Center(child: Text("ไม่พบรายวิชาที่ค้นหา"));
-          }
+                if (docs.isEmpty) {
+                  return const Center(child: Text("ไม่พบรายวิชาที่ค้นหา"));
+                }
 
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (_, i) {
-              final data = docs[i].data() as Map<String, dynamic>;
-              final id = docs[i].id;
-              return _SubjectTile(
-                id: id,
-                name: "${data['code']} • ${data['name_th']}",
-                grade: data['grade'] ?? '',
-                credits: data['credits']?.toString() ?? '',
-                semester: data['semester'] ?? '',
-                onEdit: () =>
-                    context.push('/student/subjects/$id/edit', extra: data),
-              );
-            },
-          );
-        },
-      ),
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) {
+                    final data = docs[i];
+                    return _SubjectTile(
+                      id: data["id"],
+                      name:
+                          "${data['subject_id']} • ${data['subject_thname']} (${data['subject_enname']})",
+                      grade: data['enrollment_grade'] ?? '',
+                      credits: data['subject_credits']?.toString() ?? '',
+                      semester: data['enrollment_semester'] ?? '',
+                      onEdit: () =>
+                          context.push('/student/subjects/${data["id"]}/edit', extra: data),
+                    );
+                  },
+                );
+              },
+            ),
 
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/student/subjects/add'),

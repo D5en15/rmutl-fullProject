@@ -15,25 +15,44 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
   static const _border = Color(0xFFEFF1F7);
 
   final _form = GlobalKey<FormState>();
-  final _code = TextEditingController();
+  final _id = TextEditingController();
   final _nameTh = TextEditingController();
   final _nameEn = TextEditingController();
   final _credits = TextEditingController();
 
   List<String> _selectedSubPLOs = [];
+  Map<String, List<Map<String, dynamic>>> _ploMap = {}; // PLO -> SubPLO
 
-  // ✅ SubPLO mapping
-  final Map<String, List<String>> _subploGroups = {
-    "PLO1": ["1A", "1B", "1C", "1D", "1E", "1F"],
-    "PLO2": ["2A", "2B", "2C"],
-    "PLO3": ["3A", "3B", "3C", "3D", "3E", "3F"],
-    "PLO4": ["4A", "4B", "4C", "4D"],
-    "PLO5": ["5A", "5B", "5C", "5D", "5E", "5F", "5G"],
-  };
+  @override
+  void initState() {
+    super.initState();
+    _loadPLOs();
+  }
+
+  Future<void> _loadPLOs() async {
+    final ploSnap = await FirebaseFirestore.instance.collection("plo").get();
+    final subploSnap =
+        await FirebaseFirestore.instance.collection("subplo").get();
+
+    final subs = {for (var d in subploSnap.docs) d.id: d.data()};
+    final map = <String, List<Map<String, dynamic>>>{};
+
+    for (var p in ploSnap.docs) {
+      final subIds = List<String>.from(p["subplo_id"] ?? []);
+      map[p.id] = subIds.map((sid) {
+        return {
+          "id": sid,
+          "desc": subs[sid]?["subplo_description"] ?? "",
+        };
+      }).toList();
+    }
+
+    setState(() => _ploMap = map);
+  }
 
   @override
   void dispose() {
-    _code.dispose();
+    _id.dispose();
     _nameTh.dispose();
     _nameEn.dispose();
     _credits.dispose();
@@ -74,116 +93,121 @@ class _SubjectAddPageState extends State<SubjectAddPage> {
           onPressed: () => context.go("/admin/config/subjects"),
         ),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Form(
-            key: _form,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _fieldLabel("Subject Code"),
-                TextFormField(
-                  controller: _code,
-                  decoration: _boxDeco(),
-                  validator: (v) => v == null || v.isEmpty ? "Required" : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel("Name (TH)"),
-                TextFormField(
-                  controller: _nameTh,
-                  decoration: _boxDeco(),
-                  validator: (v) => v == null || v.isEmpty ? "Required" : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel("Name (EN)"),
-                TextFormField(
-                  controller: _nameEn,
-                  decoration: _boxDeco(),
-                  validator: (v) => v == null || v.isEmpty ? "Required" : null,
-                ),
-                const SizedBox(height: 14),
-
-                _fieldLabel("Credits"),
-                TextFormField(
-                  controller: _credits,
-                  decoration: _boxDeco(),
-                  validator: (v) => v == null || v.isEmpty ? "Required" : null,
-                ),
-                const SizedBox(height: 20),
-
-                _fieldLabel("Select SubPLOs"),
-                ..._subploGroups.entries.map((entry) {
-                  final plo = entry.key;
-                  final items = entry.value;
-                  return ExpansionTile(
-                    title: Text(
-                      plo,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.black87),
+      body: _ploMap.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Form(
+                key: _form,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _fieldLabel("Subject ID"),
+                    TextFormField(
+                      controller: _id,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? "Required" : null,
                     ),
-                    children: items.map((id) {
-                      final selected = _selectedSubPLOs.contains(id);
-                      return CheckboxListTile(
-                        title: Text(id),
-                        value: selected,
-                        onChanged: (checked) {
-                          setState(() {
-                            if (checked == true) {
-                              _selectedSubPLOs.add(id);
-                            } else {
-                              _selectedSubPLOs.remove(id);
-                            }
-                          });
-                        },
+                    const SizedBox(height: 14),
+
+                    _fieldLabel("Name (TH)"),
+                    TextFormField(
+                      controller: _nameTh,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? "Required" : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    _fieldLabel("Name (EN)"),
+                    TextFormField(
+                      controller: _nameEn,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? "Required" : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    _fieldLabel("Credits"),
+                    TextFormField(
+                      controller: _credits,
+                      decoration: _boxDeco(),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? "Required" : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _fieldLabel("Select SubPLOs"),
+                    ..._ploMap.entries.map((entry) {
+                      final ploId = entry.key;
+                      final subItems = entry.value;
+                      return ExpansionTile(
+                        title: Text(
+                          ploId,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                        children: subItems.map((item) {
+                          final sid = item["id"]!;
+                          final desc = item["desc"]!;
+                          final selected = _selectedSubPLOs.contains(sid);
+                          return CheckboxListTile(
+                            title: Text("$sid • $desc"),
+                            value: selected,
+                            onChanged: (checked) {
+                              setState(() {
+                                if (checked == true) {
+                                  _selectedSubPLOs.add(sid);
+                                } else {
+                                  _selectedSubPLOs.remove(sid);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
                       );
-                    }).toList(),
-                  );
-                }),
+                    }),
 
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 48,
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text("Add"),
                       ),
-                    ),
-                    child: const Text("Add"),
-                  ),
-                )
-              ],
+                    )
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
   Future<void> _submit() async {
     if (!(_form.currentState?.validate() ?? false)) return;
 
-    await FirebaseFirestore.instance.collection("subjects").add({
-      "code": _code.text.trim(),
-      "name_th": _nameTh.text.trim(),
-      "name_en": _nameEn.text.trim(),
-      "credits": _credits.text.trim(),
-      "subplo": _selectedSubPLOs,
+    await FirebaseFirestore.instance.collection("subject").add({
+      "subject_id": _id.text.trim(),
+      "subject_thname": _nameTh.text.trim(),
+      "subject_enname": _nameEn.text.trim(),
+      "subject_credits": _credits.text.trim(),
+      "subplo_id": _selectedSubPLOs,
     });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Subject added")),
     );
-
     context.go("/admin/config/subjects");
   }
 }

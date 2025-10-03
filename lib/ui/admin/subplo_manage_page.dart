@@ -1,12 +1,13 @@
+// lib/ui/admin/subplo_manage_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SubjectsManagePage extends StatefulWidget {
-  const SubjectsManagePage({super.key});
+class SubPLOManagePage extends StatefulWidget {
+  const SubPLOManagePage({super.key});
 
   @override
-  State<SubjectsManagePage> createState() => _SubjectsManagePageState();
+  State<SubPLOManagePage> createState() => _SubPLOManagePageState();
 
   static const _primary = Color(0xFF3D5CFF);
   static const _muted = Color(0xFF858597);
@@ -15,7 +16,7 @@ class SubjectsManagePage extends StatefulWidget {
   static const _shadow = Color(0x0D000000);
 }
 
-class _SubjectsManagePageState extends State<SubjectsManagePage> {
+class _SubPLOManagePageState extends State<SubPLOManagePage> {
   final _searchCtrl = TextEditingController();
 
   @override
@@ -29,20 +30,19 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Subjects Management'),
+        title: const Text('SubPLO Management'),
         centerTitle: false,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
-        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => context.go('/admin/config'),
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: SubjectsManagePage._primary,
-        onPressed: () => context.go('/admin/config/subjects/add'),
+        backgroundColor: SubPLOManagePage._primary,
+        onPressed: () => context.go('/admin/config/subplo/add'), // add page
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
@@ -54,7 +54,7 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
               child: TextField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
-                  hintText: 'ค้นหารายวิชา...',
+                  hintText: 'ค้นหา SubPLO...',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: const Color(0xFFF5F6FA),
@@ -68,8 +68,8 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('subject')
-                    .orderBy('subject_id')
+                    .collection('subplo')
+                    .orderBy('subplo_id')
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState ==
@@ -79,33 +79,30 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
                   }
                   if (!snapshot.hasData ||
                       snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("ยังไม่มีรายวิชา"));
+                    return const Center(
+                        child: Text("ยังไม่มี SubPLO"));
                   }
 
                   final query = _searchCtrl.text.toLowerCase();
                   final docs = snapshot.data!.docs.where((doc) {
                     final data =
                         doc.data() as Map<String, dynamic>;
-                    final id = (data['subject_id'] ?? '')
+                    final id = (data['subplo_id'] ?? '')
                         .toString()
                         .toLowerCase();
-                    final nameTh = (data['subject_thname'] ?? '')
+                    final desc = (data['subplo_description'] ?? '')
                         .toString()
                         .toLowerCase();
-                    final nameEn = (data['subject_enname'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    return id.contains(query) ||
-                        nameTh.contains(query) ||
-                        nameEn.contains(query);
+                    return id.contains(query) || desc.contains(query);
                   }).toList();
 
                   if (docs.isEmpty) {
-                    return const Center(child: Text("ไม่พบรายวิชา"));
+                    return const Center(child: Text("ไม่พบ SubPLO"));
                   }
 
                   return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    padding:
+                        const EdgeInsets.fromLTRB(16, 8, 16, 100),
                     itemCount: docs.length,
                     separatorBuilder: (_, __) =>
                         const SizedBox(height: 12),
@@ -114,16 +111,13 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
                           docs[i].data() as Map<String, dynamic>;
                       final id = docs[i].id;
                       final title =
-                          "${data['subject_id']} • ${data['subject_enname'] ?? ''}";
-                      final subtitle =
-                          "${data['subject_thname'] ?? ''} • ${data['subject_credits'] ?? ''}";
+                          "${data['subplo_id']} • ${data['subplo_description'] ?? ''}";
 
-                      return _SubjectTile(
+                      return _SubPLOTile(
                         title: title,
-                        subtitle: subtitle,
-                        icon: Icons.menu_book_outlined,
-                        onTap: () =>
-                            context.go('/admin/config/subjects/$id/edit'),
+                        icon: Icons.extension_outlined,
+                        onTap: () => context
+                            .go('/admin/config/subplo/$id/edit'),
                       );
                     },
                   );
@@ -137,24 +131,21 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
   }
 }
 
-class _SubjectTile extends StatelessWidget {
-  const _SubjectTile({
+class _SubPLOTile extends StatelessWidget {
+  const _SubPLOTile({
     required this.title,
-    required this.subtitle,
     required this.icon,
     required this.onTap,
   });
 
   final String title;
-  final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
-  static const _primary = SubjectsManagePage._primary;
-  static const _soft = SubjectsManagePage._soft;
-  static const _border = SubjectsManagePage._border;
-  static const _shadow = SubjectsManagePage._shadow;
-  static const _muted = SubjectsManagePage._muted;
+  static const _primary = SubPLOManagePage._primary;
+  static const _soft = SubPLOManagePage._soft;
+  static const _border = SubPLOManagePage._border;
+  static const _shadow = SubPLOManagePage._shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -171,13 +162,16 @@ class _SubjectTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _border),
             boxShadow: const [
-              BoxShadow(color: _shadow, blurRadius: 12, offset: Offset(0, 4)),
+              BoxShadow(
+                  color: _shadow,
+                  blurRadius: 12,
+                  offset: Offset(0, 4)),
             ],
             color: Colors.white,
           ),
           child: ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
             leading: Container(
               width: 46,
               height: 46,
@@ -189,7 +183,6 @@ class _SubjectTile extends StatelessWidget {
             ),
             title: Text(title,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text(subtitle, style: const TextStyle(color: _muted)),
             trailing: IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: onTap,

@@ -16,48 +16,65 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
   static const _border = Color(0xFFEFF1F7);
 
   final _form = GlobalKey<FormState>();
-  final _code = TextEditingController();
+  final _id = TextEditingController();
   final _nameTh = TextEditingController();
   final _nameEn = TextEditingController();
   final _credits = TextEditingController();
 
   bool _loading = true;
   List<String> _selectedSubPLOs = [];
-
-  // ✅ SubPLO mapping
-  final Map<String, List<String>> _subploGroups = {
-    "PLO1": ["1A", "1B", "1C", "1D", "1E", "1F"],
-    "PLO2": ["2A", "2B", "2C"],
-    "PLO3": ["3A", "3B", "3C", "3D", "3E", "3F"],
-    "PLO4": ["4A", "4B", "4C", "4D"],
-    "PLO5": ["5A", "5B", "5C", "5D", "5E", "5F", "5G"],
-  };
+  Map<String, List<Map<String, dynamic>>> _ploMap = {};
 
   @override
   void initState() {
     super.initState();
-    _loadSubject();
+    _loadData();
   }
 
-  Future<void> _loadSubject() async {
+  Future<void> _loadData() async {
+    // โหลดข้อมูลรายวิชา
     final doc = await FirebaseFirestore.instance
-        .collection("subjects")
+        .collection("subject") // ✅ ใช้ subject (ไม่มี s)
         .doc(widget.subjectId)
         .get();
+
+    // โหลด PLO และ SubPLO
+    final ploSnap = await FirebaseFirestore.instance.collection("plo").get();
+    final subploSnap =
+        await FirebaseFirestore.instance.collection("subplo").get();
+
+    // map subplo -> description
+    final subs = {for (var d in subploSnap.docs) d.id: d.data()};
+    final map = <String, List<Map<String, dynamic>>>{};
+
+    for (var p in ploSnap.docs) {
+      final subIds = List<String>.from(p["subplo_id"] ?? []);
+      map[p.id] = subIds.map((sid) {
+        return {
+          "id": sid,
+          "desc": subs[sid]?["subplo_description"] ?? "",
+        };
+      }).toList();
+    }
+
     if (doc.exists) {
       final data = doc.data()!;
-      _code.text = data["code"] ?? "";
-      _nameTh.text = data["name_th"] ?? "";
-      _nameEn.text = data["name_en"] ?? "";
-      _credits.text = data["credits"] ?? "";
-      _selectedSubPLOs = List<String>.from(data["subplo"] ?? []);
+      _id.text = data["subject_id"] ?? "";
+      _nameTh.text = data["subject_thname"] ?? "";
+      _nameEn.text = data["subject_enname"] ?? "";
+      _credits.text = data["subject_credits"] ?? "";
+      _selectedSubPLOs = List<String>.from(data["subplo_id"] ?? []);
     }
-    setState(() => _loading = false);
+
+    setState(() {
+      _ploMap = map;
+      _loading = false;
+    });
   }
 
   @override
   void dispose() {
-    _code.dispose();
+    _id.dispose();
     _nameTh.dispose();
     _nameEn.dispose();
     _credits.dispose();
@@ -69,9 +86,8 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
-        ),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: _border)),
       );
 
   Widget _fieldLabel(String text) => Padding(
@@ -79,13 +95,11 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
         child: Text(
           text,
           style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
+              fontWeight: FontWeight.w600, color: Colors.black87),
         ),
       );
 
-  void _goBackToSubjects() => context.go("/admin/config/subjects");
+  void _goBack() => context.go("/admin/config/subjects");
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +112,7 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: _goBackToSubjects,
+          onPressed: _goBack,
         ),
       ),
       body: _loading
@@ -110,9 +124,9 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _fieldLabel("Subject Code"),
+                    _fieldLabel("Subject ID"),
                     TextFormField(
-                      controller: _code,
+                      controller: _id,
                       decoration: _boxDeco(hint: "ENGSE101"),
                       validator: (v) =>
                           (v == null || v.isEmpty) ? "Required" : null,
@@ -147,27 +161,29 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
                     const SizedBox(height: 20),
 
                     _fieldLabel("Select SubPLOs"),
-                    ..._subploGroups.entries.map((entry) {
-                      final plo = entry.key;
-                      final items = entry.value;
+                    ..._ploMap.entries.map((entry) {
+                      final ploId = entry.key;
+                      final subItems = entry.value;
                       return ExpansionTile(
                         title: Text(
-                          plo,
+                          ploId,
                           style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.black87),
                         ),
-                        children: items.map((id) {
-                          final selected = _selectedSubPLOs.contains(id);
+                        children: subItems.map((item) {
+                          final sid = item["id"]!;
+                          final desc = item["desc"]!;
+                          final selected = _selectedSubPLOs.contains(sid);
                           return CheckboxListTile(
-                            title: Text(id),
+                            title: Text("$sid • $desc"),
                             value: selected,
                             onChanged: (checked) {
                               setState(() {
                                 if (checked == true) {
-                                  _selectedSubPLOs.add(id);
+                                  _selectedSubPLOs.add(sid);
                                 } else {
-                                  _selectedSubPLOs.remove(id);
+                                  _selectedSubPLOs.remove(sid);
                                 }
                               });
                             },
@@ -177,37 +193,21 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
                     }),
 
                     const SizedBox(height: 20),
-                    SizedBox(
-                      height: 48,
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _submit,
-                        style: ElevatedButton.styleFrom(
+                    ElevatedButton(
+                      onPressed: _submit,
+                      style: ElevatedButton.styleFrom(
                           backgroundColor: _primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text("Submit"),
-                      ),
+                          foregroundColor: Colors.white),
+                      child: const Text("Submit"),
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      height: 48,
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _delete,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE53935),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text("Delete"),
-                      ),
-                    ),
+                    ElevatedButton(
+                      onPressed: _delete,
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white),
+                      child: const Text("Delete"),
+                    )
                   ],
                 ),
               ),
@@ -219,33 +219,31 @@ class _SubjectEditPageState extends State<SubjectEditPage> {
     if (!(_form.currentState?.validate() ?? false)) return;
 
     await FirebaseFirestore.instance
-        .collection("subjects")
+        .collection("subject") // ✅ ใช้ subject (ไม่มี s)
         .doc(widget.subjectId)
         .update({
-      "code": _code.text.trim(),
-      "name_th": _nameTh.text.trim(),
-      "name_en": _nameEn.text.trim(),
-      "credits": _credits.text.trim(),
-      "subplo": _selectedSubPLOs,
+      "subject_id": _id.text.trim(),
+      "subject_thname": _nameTh.text.trim(),
+      "subject_enname": _nameEn.text.trim(),
+      "subject_credits": _credits.text.trim(),
+      "subplo_id": _selectedSubPLOs,
     });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Subject updated")),
-    );
-    _goBackToSubjects();
+        const SnackBar(content: Text("Subject updated")));
+    _goBack();
   }
 
   Future<void> _delete() async {
     await FirebaseFirestore.instance
-        .collection("subjects")
+        .collection("subject") // ✅ ใช้ subject (ไม่มี s)
         .doc(widget.subjectId)
         .delete();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Subject deleted")),
-    );
-    _goBackToSubjects();
+        const SnackBar(content: Text("Subject deleted")));
+    _goBack();
   }
 }

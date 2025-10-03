@@ -14,15 +14,46 @@ class DashboardConfigPage extends StatelessWidget {
   static const _shadow = Color(0x0D000000);
 
   Future<int> _countDocs(String collection) async {
-    final snap =
-        await FirebaseFirestore.instance.collection(collection).get();
-    return snap.docs.length;
+    try {
+      final snap = await FirebaseFirestore.instance.collection(collection).get();
+      return snap.docs.length;
+    } catch (e) {
+      debugPrint("⚠️ Error loading $collection: $e");
+      return 0;
+    }
+  }
+
+  Future<Map<String, int>> _countSubjectMappings() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("subject").get();
+      final total = snap.docs.length;
+      final mapped = snap.docs
+          .where((doc) => (doc.data()["subplo_id"] ?? "").toString().isNotEmpty)
+          .length;
+      return {"mapped": mapped, "total": total};
+    } catch (e) {
+      debugPrint("⚠️ Error loading subject mapping: $e");
+      return {"mapped": 0, "total": 0};
+    }
+  }
+
+  Future<Map<String, int>> _countPloMappings() async {
+    try {
+      final snap = await FirebaseFirestore.instance.collection("plo").get();
+      final total = snap.docs.length;
+      final mapped = snap.docs
+          .where((doc) => (doc.data()["subplo_id"] ?? "").toString().isNotEmpty)
+          .length;
+      return {"mapped": mapped, "total": total};
+    } catch (e) {
+      debugPrint("⚠️ Error loading plo mapping: $e");
+      return {"mapped": 0, "total": 0};
+    }
   }
 
   Widget _tile({
     required IconData icon,
     required String title,
-    required int count,
     required String subtitle,
     required VoidCallback onManage,
   }) {
@@ -51,7 +82,7 @@ class DashboardConfigPage extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
         ),
         subtitle: Text(
-          "$count $subtitle",
+          subtitle,
           style: const TextStyle(color: _muted),
         ),
         trailing: ElevatedButton(
@@ -62,8 +93,7 @@ class DashboardConfigPage extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
           child: const Text('manage'),
         ),
@@ -71,37 +101,12 @@ class DashboardConfigPage extends StatelessWidget {
     );
   }
 
-  Widget _warn(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: _border),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(color: _shadow, blurRadius: 8, offset: Offset(0, 3)),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(color: Colors.black87),
-              ),
-            ),
-          ],
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ❌ ไม่มีปุ่มย้อนกลับ
+        automaticallyImplyLeading: false,
         title: const Text('Config'),
         centerTitle: false,
         backgroundColor: Colors.white,
@@ -112,9 +117,13 @@ class DashboardConfigPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
         child: FutureBuilder(
           future: Future.wait([
-            _countDocs('subjects'),
-            _countDocs('skills'),
-            _countDocs('careers'),
+            _countDocs('subject'),
+            _countDocs('subplo'),
+            _countDocs('plo'),
+            _countDocs('career'),
+            _countDocs('career_mapping'),
+            _countSubjectMappings(),
+            _countPloMappings(),
           ]),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -124,43 +133,80 @@ class DashboardConfigPage extends StatelessWidget {
               return const Center(child: Text("No data"));
             }
 
-            final counts = snapshot.data as List<int>;
-            final subjectsCount = counts[0];
-            final skillsCount = counts[1];
-            final careersCount = counts[2];
+            final results = snapshot.data as List<dynamic>;
+            final subjectsCount = results[0] as int;
+            final subploCount = results[1] as int;
+            final ploCount = results[2] as int;
+            final careersCount = results[3] as int;
+            final mappingCount = results[4] as int;
+            final subjectMapping = results[5] as Map<String, int>;
+            final ploMapping = results[6] as Map<String, int>;
+
+            final subjectMapped = subjectMapping["mapped"]!;
+            final subjectTotal = subjectMapping["total"]!;
+            final ploMapped = ploMapping["mapped"]!;
+            final ploTotal = ploMapping["total"]!;
 
             return SingleChildScrollView(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Text("📘 Academic",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 6),
                   _tile(
                     icon: Icons.menu_book_outlined,
                     title: 'Subjects',
-                    count: subjectsCount,
-                    subtitle: 'subjects',
+                    subtitle: "$subjectsCount subjects",
                     onManage: () => context.go('/admin/config/subjects'),
                   ),
                   _tile(
-                    icon: Icons.auto_graph_outlined,
-                    title: 'Skills',
-                    count: skillsCount,
-                    subtitle: 'skills',
-                    onManage: () => context.go('/admin/config/skills'),
+                    icon: Icons.extension_outlined,
+                    title: 'SubPLO',
+                    subtitle: "$subploCount sub skills",
+                    onManage: () => context.go('/admin/config/subplo'),
                   ),
+                  _tile(
+                    icon: Icons.layers_outlined,
+                    title: 'PLO',
+                    subtitle: "$ploCount main skills",
+                    onManage: () => context.go('/admin/config/plo'),
+                  ),
+
+                  // ✅ Mapping menu (ไม่แสดงจำนวนแล้ว)
+                  _tile(
+                    icon: Icons.school_outlined,
+                    title: 'Subject ↔ SubPLO',
+                    subtitle: "Manage subject-subplo mapping",
+                    onManage: () =>
+                        context.go('/admin/config/subject-subplo-mapping'),
+                  ),
+                  _tile(
+                    icon: Icons.account_tree_outlined,
+                    title: 'PLO ↔ SubPLO',
+                    subtitle: "Manage plo-subplo mapping",
+                    onManage: () =>
+                        context.go('/admin/config/plo-subplo-mapping'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  const Text("👨‍💻 Careers",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 6),
                   _tile(
                     icon: Icons.work_outline,
                     title: 'Careers',
-                    count: careersCount,
-                    subtitle: 'careers',
+                    subtitle: "$careersCount careers",
                     onManage: () => context.go('/admin/config/careers'),
                   ),
-                  const SizedBox(height: 8),
-                  // ✅ ตัวอย่าง warn จริง (ปรับตาม logic ได้)
-                  if (subjectsCount == 0)
-                    _warn('ยังไม่มีวิชาในระบบ'),
-                  if (skillsCount == 0)
-                    _warn('ยังไม่มีทักษะในระบบ'),
-                  if (careersCount == 0)
-                    _warn('ยังไม่มีอาชีพในระบบ'),
+                  _tile(
+                    icon: Icons.share_outlined,
+                    title: 'Career Mapping',
+                    subtitle: "Manage career mapping",
+                    onManage: () => context.go('/admin/config/mappings'),
+                  ),
                 ],
               ),
             );

@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SubjectsManagePage extends StatefulWidget {
-  const SubjectsManagePage({super.key});
+class PLOManagePage extends StatefulWidget {
+  const PLOManagePage({super.key});
 
   @override
-  State<SubjectsManagePage> createState() => _SubjectsManagePageState();
+  State<PLOManagePage> createState() => _PLOManagePageState();
 
+  // 🎨 Design tokens
   static const _primary = Color(0xFF3D5CFF);
   static const _muted = Color(0xFF858597);
   static const _soft = Color(0xFFF6F7FF);
@@ -15,7 +16,7 @@ class SubjectsManagePage extends StatefulWidget {
   static const _shadow = Color(0x0D000000);
 }
 
-class _SubjectsManagePageState extends State<SubjectsManagePage> {
+class _PLOManagePageState extends State<PLOManagePage> {
   final _searchCtrl = TextEditingController();
 
   @override
@@ -29,7 +30,7 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Subjects Management'),
+        title: const Text("PLO Management"),
         centerTitle: false,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
@@ -41,89 +42,77 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: SubjectsManagePage._primary,
-        onPressed: () => context.go('/admin/config/subjects/add'),
+        backgroundColor: PLOManagePage._primary,
+        onPressed: () => context.go('/admin/config/plo/add'),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: SafeArea(
         top: false,
         child: Column(
           children: [
+            // 🔍 Search box
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: TextField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
-                  hintText: 'ค้นหารายวิชา...',
+                  hintText: 'ค้นหา PLO...',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: const Color(0xFFF5F6FA),
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
             ),
+            // 📜 PLO list
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('subject')
-                    .orderBy('subject_id')
+                    .collection('plo')
+                    .orderBy('plo_id')
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
-                    return const Center(
-                        child: CircularProgressIndicator());
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
                   }
-                  if (!snapshot.hasData ||
-                      snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("ยังไม่มีรายวิชา"));
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text("ยังไม่มี PLO"));
                   }
 
                   final query = _searchCtrl.text.toLowerCase();
                   final docs = snapshot.data!.docs.where((doc) {
-                    final data =
-                        doc.data() as Map<String, dynamic>;
-                    final id = (data['subject_id'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    final nameTh = (data['subject_thname'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    final nameEn = (data['subject_enname'] ?? '')
-                        .toString()
-                        .toLowerCase();
-                    return id.contains(query) ||
-                        nameTh.contains(query) ||
-                        nameEn.contains(query);
+                    final data = doc.data() as Map<String, dynamic>;
+                    final id =
+                        (data['plo_id'] ?? '').toString().toLowerCase();
+                    final desc =
+                        (data['plo_description'] ?? '').toString().toLowerCase();
+                    return id.contains(query) || desc.contains(query);
                   }).toList();
 
                   if (docs.isEmpty) {
-                    return const Center(child: Text("ไม่พบรายวิชา"));
+                    return const Center(child: Text("ไม่พบ PLO"));
                   }
 
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                     itemCount: docs.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: 12),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) {
-                      final data =
-                          docs[i].data() as Map<String, dynamic>;
+                      final data = docs[i].data() as Map<String, dynamic>;
                       final id = docs[i].id;
-                      final title =
-                          "${data['subject_id']} • ${data['subject_enname'] ?? ''}";
-                      final subtitle =
-                          "${data['subject_thname'] ?? ''} • ${data['subject_credits'] ?? ''}";
+                      final title = data['plo_id'] ?? '';
+                      final subtitle = data['plo_description'] ?? '';
 
-                      return _SubjectTile(
+                      return _PLOTile(
                         title: title,
                         subtitle: subtitle,
-                        icon: Icons.menu_book_outlined,
+                        icon: Icons.check_circle_outline,
                         onTap: () =>
-                            context.go('/admin/config/subjects/$id/edit'),
+                            context.go('/admin/config/plo/$id/edit'),
                       );
                     },
                   );
@@ -137,8 +126,8 @@ class _SubjectsManagePageState extends State<SubjectsManagePage> {
   }
 }
 
-class _SubjectTile extends StatelessWidget {
-  const _SubjectTile({
+class _PLOTile extends StatelessWidget {
+  const _PLOTile({
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -150,11 +139,11 @@ class _SubjectTile extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  static const _primary = SubjectsManagePage._primary;
-  static const _soft = SubjectsManagePage._soft;
-  static const _border = SubjectsManagePage._border;
-  static const _shadow = SubjectsManagePage._shadow;
-  static const _muted = SubjectsManagePage._muted;
+  static const _primary = PLOManagePage._primary;
+  static const _soft = PLOManagePage._soft;
+  static const _border = PLOManagePage._border;
+  static const _shadow = PLOManagePage._shadow;
+  static const _muted = PLOManagePage._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +178,8 @@ class _SubjectTile extends StatelessWidget {
             ),
             title: Text(title,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text(subtitle, style: const TextStyle(color: _muted)),
+            subtitle: Text(subtitle,
+                style: const TextStyle(color: _muted), maxLines: 2),
             trailing: IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: onTap,

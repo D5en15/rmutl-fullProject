@@ -36,7 +36,7 @@ import 'ui/teacher/feedback_page.dart';
 import 'ui/admin/admin_home_page.dart' as a;
 import 'ui/admin/user_manage_page.dart';
 import 'ui/admin/user_edit_form_page.dart';
-import 'ui/admin/user_add_page.dart'; // ✅ เพิ่มเข้ามา
+import 'ui/admin/user_add_page.dart';
 import 'ui/admin/role_permission_page.dart';
 import 'ui/admin/moderation_page.dart';
 
@@ -45,20 +45,28 @@ import 'ui/admin/dashboard_config_page.dart';
 import 'ui/admin/subjects_manage_page.dart';
 import 'ui/admin/subject_add_page.dart';
 import 'ui/admin/subject_edit_page.dart';
-// Skills
-import 'ui/admin/skills_manage_page.dart';
-import 'ui/admin/skill_add_page.dart';
-import 'ui/admin/skill_edit_page.dart';
+// SubPLO
+import 'ui/admin/subplo_manage_page.dart';
+import 'ui/admin/subplo_add_page.dart';
+import 'ui/admin/subplo_edit_page.dart';
+// PLO
+import 'ui/admin/plo_manage_page.dart';
+import 'ui/admin/plo_add_page.dart';
+import 'ui/admin/plo_edit_page.dart';
 // Careers
 import 'ui/admin/career_manage_page.dart';
 import 'ui/admin/career_add_page.dart';
 import 'ui/admin/career_edit_page.dart';
+// Mapping ✅
+import 'ui/admin/subject_subplo_mapping_page.dart';
+import 'ui/admin/plo_subplo_mapping_page.dart';
+import 'ui/admin/career_mapping_page.dart';
 
 // ---------- FORUM (shared) ----------
 import 'ui/forum/forum_list_page.dart';
 import 'ui/forum/post_detail_page.dart';
 import 'ui/forum/create_post_page.dart';
-import 'ui/forum/edit_post_page.dart'; // ✅ เพิ่มใหม่
+import 'ui/forum/edit_post_page.dart';
 
 class AppRouter {
   static final _rootKey = GlobalKey<NavigatorState>();
@@ -94,7 +102,7 @@ class AppRouter {
         ),
       ),
 
-      // Messages & Chat (นอก shell)
+      // Messages & Chat
       GoRoute(path: '/student/messages', builder: (_, __) => const MessagesPage()),
       GoRoute(path: '/teacher/messages', builder: (_, __) => const MessagesPage()),
       GoRoute(path: '/admin/messages', builder: (_, __) => const MessagesPage()),
@@ -126,7 +134,7 @@ class AppRouter {
               GoRoute(
                 path: ':id/edit',
                 builder: (_, s) =>
-                    EditSubjectPage(subjectId: s.pathParameters['id']!),
+                    EditSubjectPage(enrollmentId: s.pathParameters['id']!), // ✅ fixed
               ),
             ],
           ),
@@ -143,7 +151,7 @@ class AppRouter {
               GoRoute(
                 path: ':postId/edit',
                 builder: (_, s) =>
-                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
+                    EditPostPage(postId: s.pathParameters['postId']!),
               ),
             ],
           ),
@@ -187,7 +195,7 @@ class AppRouter {
               GoRoute(
                 path: ':postId/edit',
                 builder: (_, s) =>
-                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
+                    EditPostPage(postId: s.pathParameters['postId']!),
               ),
             ],
           ),
@@ -210,9 +218,7 @@ class AppRouter {
             builder: (_, __) => const a.AdminHomePage(),
             routes: [
               GoRoute(path: 'users', builder: (_, __) => const UserManagePage()),
-              GoRoute(
-                  path: 'users/add',
-                  builder: (_, __) => const UserAddPage()), // ✅ เพิ่ม
+              GoRoute(path: 'users/add', builder: (_, __) => const UserAddPage()),
               GoRoute(
                 path: 'users/:id',
                 builder: (_, s) => UserEditFormPage(
@@ -224,7 +230,7 @@ class AppRouter {
               GoRoute(path: 'roles', builder: (_, __) => const RolePermissionPage()),
               GoRoute(path: 'moderation', builder: (_, __) => const ModerationPage()),
 
-              // CONFIG dashboard (alias)
+              // CONFIG dashboard
               GoRoute(path: 'career-config', builder: (_, __) => const DashboardConfigPage()),
               GoRoute(path: 'config', builder: (_, __) => const DashboardConfigPage()),
 
@@ -241,17 +247,30 @@ class AppRouter {
                     SubjectEditPage(subjectId: s.pathParameters['id']!),
               ),
 
-              // SKILLS management
+              // SUBPLO management
               GoRoute(
-                  path: 'config/skills',
-                  builder: (_, __) => const SkillsManagePage()),
+                  path: 'config/subplo',
+                  builder: (_, __) => const SubPLOManagePage()),
               GoRoute(
-                  path: 'config/skills/add',
-                  builder: (_, __) => const SkillAddPage()),
+                  path: 'config/subplo/add',
+                  builder: (_, __) => const SubPLOAddPage()),
               GoRoute(
-                path: 'config/skills/:id/edit',
+                path: 'config/subplo/:id/edit',
                 builder: (_, s) =>
-                    SkillEditPage(skillId: s.pathParameters['id']!),
+                    SubPLOEditPage(subploId: s.pathParameters['id']!),
+              ),
+
+              // PLO management
+              GoRoute(
+                  path: 'config/plo',
+                  builder: (_, __) => const PLOManagePage()),
+              GoRoute(
+                  path: 'config/plo/add',
+                  builder: (_, __) => const PLOAddPage()),
+              GoRoute(
+                path: 'config/plo/:id/edit',
+                builder: (_, s) =>
+                    PLOEditPage(ploId: s.pathParameters['id']!),
               ),
 
               // CAREERS management
@@ -266,56 +285,43 @@ class AppRouter {
                 builder: (_, s) =>
                     CareerEditPage(careerId: s.pathParameters['id']!),
               ),
-            ],
-          ),
 
-          // aliases นอกซับรูต
-          GoRoute(path: '/admin/users', builder: (_, __) => const UserManagePage()),
-          GoRoute(
-              path: '/admin/users/add', builder: (_, __) => const UserAddPage()), // ✅ alias
-          GoRoute(
-            path: '/admin/users/:id',
-            builder: (_, s) => UserEditFormPage(
-              userId: s.pathParameters['id']!,
-              email: s.uri.queryParameters['email'] ?? s.pathParameters['id']!,
-            ),
-          ),
-          GoRoute(path: '/admin/moderation', builder: (_, __) => const ModerationPage()),
-          GoRoute(path: '/admin/settings', builder: (_, __) => const SettingsPage()),
-          GoRoute(path: '/admin/profile', builder: (_, __) => const ProfilePage()),
-          GoRoute(
-              path: '/admin/notifications',
-              builder: (_, __) => const NotificationPage()),
-
-          GoRoute(
-            path: '/admin/forum',
-            builder: (_, __) => const ForumListPage(),
-            routes: [
-              GoRoute(path: 'create', builder: (_, __) => const CreatePostPage()),
+              // ✅ Mapping pages
               GoRoute(
-                path: ':postId',
-                builder: (_, s) =>
-                    PostDetailPage(postId: s.pathParameters['postId']!),
-              ),
+                  path: 'config/subject-subplo-mapping',
+                  builder: (_, __) => const SubjectSubPLOMappingPage()),
               GoRoute(
-                path: ':postId/edit',
-                builder: (_, s) =>
-                    EditPostPage(postId: s.pathParameters['postId']!), // ✅
+                  path: 'config/plo-subplo-mapping',
+                  builder: (_, __) => const PLOSubPLOMappingPage()),
+              GoRoute(
+                  path: 'config/mappings',
+                  builder: (_, __) => const CareerMappingPage()),
+
+              // ✅ Admin forum
+              GoRoute(
+                path: 'forum',
+                builder: (_, __) => const ForumListPage(),
+                routes: [
+                  GoRoute(path: 'create', builder: (_, __) => const CreatePostPage()),
+                  GoRoute(
+                    path: ':postId',
+                    builder: (_, s) =>
+                        PostDetailPage(postId: s.pathParameters['postId']!),
+                  ),
+                  GoRoute(
+                    path: ':postId/edit',
+                    builder: (_, s) =>
+                        EditPostPage(postId: s.pathParameters['postId']!),
+                  ),
+                ],
+              ),
+
+              // ✅ Admin settings
+              GoRoute(
+                path: 'settings',
+                builder: (_, __) => const SettingsPage(),
               ),
             ],
-          ),
-
-          // Absolute aliases
-          GoRoute(
-              path: '/admin/config/careers',
-              builder: (_, __) => const CareerManagePage()),
-          GoRoute(
-              path: '/admin/config/careers/add',
-              builder: (_, __) => const CareerAddPage()),
-          GoRoute(
-            path: '/admin/config/careers/:id/edit',
-            builder: (_, s) =>
-                CareerEditPage(careerId: s.pathParameters['id']!),
           ),
         ],
       ),
@@ -334,7 +340,7 @@ class AppRouter {
           GoRoute(
             path: ':postId/edit',
             builder: (_, s) =>
-                EditPostPage(postId: s.pathParameters['postId']!), // ✅
+                EditPostPage(postId: s.pathParameters['postId']!),
           ),
         ],
       ),
