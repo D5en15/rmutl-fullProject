@@ -11,9 +11,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController =
-      TextEditingController();
+  final TextEditingController emailOrUserController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
   bool obscurePassword = true;
   bool loading = false;
 
@@ -21,44 +20,74 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
-    emailController.dispose();
+    emailOrUserController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    final email = emailController.text.trim();
+    final input = emailOrUserController.text.trim();
     final password = passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      _toast('กรอกอีเมลและรหัสผ่าน');
+    if (input.isEmpty || password.isEmpty) {
+      _toast('กรอกอีเมล/ชื่อผู้ใช้ และรหัสผ่าน');
       return;
     }
 
     setState(() => loading = true);
     try {
-      debugPrint('🔐 signIn: $email');
+      debugPrint('🔐 login with: $input');
+
+      String? emailToLogin = input;
+
+      // 👉 ถ้า input ไม่ใช่อีเมล → ให้หาจาก Firestore ว่าเป็น username
+      if (!input.contains('@')) {
+        final snap = await FirebaseFirestore.instance
+            .collection('user')
+            .where('user_name', isEqualTo: input)
+            .limit(1)
+            .get();
+
+        if (snap.docs.isEmpty) {
+          _toast('❌ ไม่พบบัญชีผู้ใช้');
+          setState(() => loading = false);
+          return;
+        }
+
+        emailToLogin = snap.docs.first.data()['user_email'] as String?;
+      }
+
+      if (emailToLogin == null || emailToLogin.isEmpty) {
+        _toast('❌ บัญชีนี้ไม่มีอีเมลสำหรับเข้าสู่ระบบ');
+        setState(() => loading = false);
+        return;
+      }
+
+      // ✅ Auth ตรวจสอบ email/password
       final cred = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+          .signInWithEmailAndPassword(email: emailToLogin, password: password);
 
       final uid = cred.user!.uid;
       debugPrint('✅ Auth OK uid=$uid');
 
+      // ✅ ดึงข้อมูล Firestore (collection user)
       final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          await FirebaseFirestore.instance.collection('user').doc(uid).get();
 
       if (!doc.exists) {
-        _toast('Firestore: ไม่พบ users/$uid (สร้าง doc ตาม UID และใส่ role)');
+        _toast('❌ ไม่พบบัญชีใน Firestore');
         return;
       }
 
-      final role = (doc.data()?['role'] as String?)?.toLowerCase();
+      final data = doc.data()!;
+      final role = (data['user_role'] as String?)?.toLowerCase();
+
       if (role == null || role.isEmpty) {
-        _toast('Firestore: users/$uid ไม่มี field "role"');
+        _toast('❌ บัญชีนี้ไม่มี role');
         return;
       }
 
-      _toast('เข้าสู่ระบบสำเร็จ (role=$role)');
+      _toast('✅ เข้าสู่ระบบสำเร็จ (role=$role)');
 
       if (!mounted || !navigateAfterLogin) return;
 
@@ -73,14 +102,11 @@ class _LoginPageState extends State<LoginPage> {
           context.go('/student');
       }
     } on FirebaseAuthException catch (e) {
-      debugPrint('❌ Auth: code=${e.code}, msg=${e.message}');
-      _toast('Auth error: ${e.code} ${e.message ?? ""}');
-    } on FirebaseException catch (e) {
-      debugPrint('❌ Firestore: code=${e.code}, msg=${e.message}');
-      _toast('Firestore error: ${e.code} ${e.message ?? ""}');
+      debugPrint('❌ Auth error: code=${e.code}, msg=${e.message}');
+      _toast('เข้าสู่ระบบไม่สำเร็จ: ${e.message}');
     } catch (e) {
       debugPrint('❌ Unknown: $e');
-      _toast('Error: $e');
+      _toast('เกิดข้อผิดพลาด: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -147,20 +173,17 @@ class _LoginPageState extends State<LoginPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 24),
-
                 const Text(
-                  "Email",
+                  "Email or Username",
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 6),
                 TextField(
-                  controller: emailController,
+                  controller: emailOrUserController,
                   textInputAction: TextInputAction.next,
-                  keyboardType: TextInputType.emailAddress,
                   decoration: _dec(),
                 ),
                 const SizedBox(height: 20),
-
                 const Text(
                   "Password",
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
@@ -172,10 +195,7 @@ class _LoginPageState extends State<LoginPage> {
                   onSubmitted: (_) => _login(),
                   decoration: _dec(isPassword: true),
                 ),
-
                 const SizedBox(height: 12),
-
-                // 👉 ปุ่ม Forgot password → ไปหน้า /forgot
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -189,7 +209,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -219,9 +238,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -238,9 +255,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 12),
-
                 Row(
                   children: [
                     const Expanded(child: Divider()),

@@ -81,7 +81,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   String _gen6() => List.generate(6, (_) => Random.secure().nextInt(10)).join();
 
-  // ✅ Get OTP (เช็คอีเมลซ้ำใน Firebase Auth และ Firestore)
+  // ✅ Get OTP
   Future<void> _getOtp() async {
     final email = _emailCtrl.text.trim().toLowerCase();
     if (email.isEmpty) {
@@ -100,10 +100,10 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      // 🔎 เช็คใน Firestore (users collection)
+      // 🔎 เช็คใน Firestore (user collection)
       final snap = await FirebaseFirestore.instance
-          .collection("users")
-          .where("email", isEqualTo: email)
+          .collection("user")
+          .where("user_email", isEqualTo: email)
           .limit(1)
           .get();
       if (snap.docs.isNotEmpty) {
@@ -118,14 +118,14 @@ class _RegisterPageState extends State<RegisterPage> {
       final expires =
           Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 10)));
 
-      final otpRef =
-          FirebaseFirestore.instance.collection('email_otps').doc(email);
+      final otpId = Random().nextInt(900) + 100; // 100–999
 
-      await otpRef.set({
-        'code': code,
-        'createdAt': now,
-        'expiresAt': expires,
-        'consumed': false,
+      await FirebaseFirestore.instance.collection('email_otp').doc(email).set({
+        'otp_id': otpId,
+        'user_id': null,
+        'otp_code': code,
+        'otp_created': now,
+        'otp_expire': expires,
       });
 
       // ส่งอีเมลผ่าน EmailJS
@@ -151,12 +151,6 @@ class _RegisterPageState extends State<RegisterPage> {
         _toast('ส่งอีเมลไม่สำเร็จ: ${res.statusCode}');
       }
       setState(() {});
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'invalid-email') {
-        _toast('รูปแบบอีเมลไม่ถูกต้อง');
-      } else {
-        _toast('FirebaseAuth error: ${e.code}');
-      }
     } catch (e) {
       _toast('ส่ง OTP ผิดพลาด: $e');
     } finally {
@@ -164,6 +158,7 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // ✅ Verify OTP
   Future<void> _verifyOtp() async {
     if (!_otpSent) {
       _toast('ยังไม่ได้ส่ง OTP');
@@ -175,24 +170,35 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     setState(() => _loading = true);
-    final email = _emailCtrl.text.trim();
+    final email = _emailCtrl.text.trim().toLowerCase();
     final input = _otpCtrl.text.trim();
 
     try {
-      await FirebaseFirestore.instance
-          .collection('email_otps')
+      final doc = await FirebaseFirestore.instance
+          .collection('email_otp')
           .doc(email)
-          .collection('verify_attempts')
-          .add({
-        'code': input,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+          .get();
+      if (!doc.exists) {
+        _toast('ไม่พบข้อมูล OTP');
+        return;
+      }
+
+      final data = doc.data()!;
+      final code = data['otp_code'] as String;
+      final expires = (data['otp_expire'] as Timestamp).toDate();
+
+      if (DateTime.now().isAfter(expires)) {
+        _toast('OTP หมดอายุ');
+        return;
+      }
+      if (input != code) {
+        _toast('OTP ไม่ถูกต้อง');
+        return;
+      }
 
       _otpVerified = true;
       _toast('ยืนยัน OTP สำเร็จ');
       setState(() {});
-    } on FirebaseException catch (e) {
-      _toast('OTP ไม่ถูกต้องหรือหมดอายุ: ${e.code}');
     } catch (e) {
       _toast('ยืนยัน OTP ผิดพลาด: $e');
     } finally {
@@ -200,10 +206,9 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  // ✅ Register
   Future<void> _register() async {
-    if (!(_formKey.currentState?.validate() ?? false) || !_agree) {
-      return;
-    }
+    if (!(_formKey.currentState?.validate() ?? false) || !_agree) return;
     if (!_otpVerified) {
       _toast('กรุณายืนยัน OTP ให้เรียบร้อย');
       return;
@@ -211,7 +216,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() => _loading = true);
     final username = _usernameCtrl.text.trim();
-    final name = _nameCtrl.text.trim();
+    final fullname = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim().toLowerCase();
     final pass = _passCtrl.text;
 
@@ -220,28 +225,23 @@ class _RegisterPageState extends State<RegisterPage> {
           .createUserWithEmailAndPassword(email: email, password: pass);
       final uid = cred.user!.uid;
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'username': username,
-        'displayName': name,
-        'email': email,
-        'role': 'student',
-        'createdAt': FieldValue.serverTimestamp(),
+      // ✅ ใช้ uid ของ FirebaseAuth เป็น user_id
+      await FirebaseFirestore.instance.collection('user').doc(uid).set({
+        'user_id': uid,
+        'user_code': null,
+        'user_name': username,
+        'user_fullname': fullname,
+        'user_email': email,
+        'user_role': 'Student',
+        'user_class': null,
+        'user_img': '',
       });
 
-      await FirebaseFirestore.instance
-          .collection('email_otps')
-          .doc(email)
-          .delete();
+      await FirebaseFirestore.instance.collection('email_otp').doc(email).delete();
 
       _toast('สมัครสมาชิกสำเร็จ');
       if (!mounted) return;
       context.go('/login');
-    } on FirebaseAuthException catch (e) {
-      var msg = 'สมัครไม่สำเร็จ: ${e.code}';
-      if (e.code == 'email-already-in-use') msg = 'อีเมลนี้ถูกใช้งานแล้ว';
-      if (e.code == 'weak-password') msg = 'รหัสผ่านอ่อนเกินไป';
-      if (e.code == 'invalid-email') msg = 'รูปแบบอีเมลไม่ถูกต้อง';
-      _toast(msg);
     } catch (e) {
       _toast('เกิดข้อผิดพลาด: $e');
     } finally {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -18,7 +19,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Future<void> _resetPassword() async {
-    final email = _emailCtrl.text.trim();
+    final email = _emailCtrl.text.trim().toLowerCase();
     if (email.isEmpty) {
       _toast("กรอกอีเมลก่อน");
       return;
@@ -26,9 +27,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     setState(() => _loading = true);
     try {
+      final snap = await FirebaseFirestore.instance
+          .collection('user')
+          .where('user_email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) {
+        _toast("❌ ไม่พบบัญชีนี้ในระบบ");
+        setState(() => _loading = false);
+        return;
+      }
+
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       _toast("📩 ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปที่ $email แล้ว");
-      context.go("/login");
+
+      if (mounted) context.go("/login");
     } on FirebaseAuthException catch (e) {
       if (e.code == "user-not-found") {
         _toast("❌ ไม่พบบัญชีนี้ในระบบ");
@@ -46,6 +60,17 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   void dispose() {
     _emailCtrl.dispose();
     super.dispose();
+  }
+
+  InputDecoration _dec() {
+    return InputDecoration(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+        borderSide: BorderSide(color: Color(0xFF3D5CFF)),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    );
   }
 
   @override
@@ -77,18 +102,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 24),
+
+            // 👉 Email Field แบบเดียวกับหน้า Login
+            const Text(
+              "Email",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 6),
             TextField(
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: "Email",
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+              decoration: _dec(),
             ),
+
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _loading ? null : _resetPassword,
@@ -105,7 +134,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             ),
             const SizedBox(height: 16),
 
-            // 👇 เพิ่มส่วน "Remember your password?  Log in"
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
