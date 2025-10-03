@@ -7,9 +7,9 @@ class EditProfileInitial {
   final String? username;
   final String? name;
   final String? email;
-  final String? studentId;
-  final String? className;
-  final String? avatar;
+  final String? studentId; // ← map กับ user_code
+  final String? className; // ← map กับ user_class
+  final String? avatar;    // ← map กับ user_img (URL/asset)
 
   const EditProfileInitial({
     this.username,
@@ -53,39 +53,105 @@ class _EditProfilePageState extends State<EditProfilePage> {
       TextEditingController(text: widget.initial?.email ?? '');
   late final TextEditingController _stuId =
       TextEditingController(text: widget.initial?.studentId ?? '');
-  String? _classValue;
 
-  String? _selectedAvatar;
+  String? _classValue = '';
+  String? _selectedAvatarRaw; // เก็บ raw (URL หรือ asset path)
+  ImageProvider? _avatarPreview;
+
+  String? _docId; // เก็บ docId ของคอลเลกชัน 'user' เพื่อใช้ update
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _classValue = widget.initial?.className;
-    _selectedAvatar = widget.initial?.avatar ?? '1.png';
+    _selectedAvatarRaw = widget.initial?.avatar;
+    _avatarPreview = _toImageProvider(_selectedAvatarRaw);
+    _loadUserData(); // ✅ โหลดข้อมูลจริงจาก DB ใหม่
+  }
 
-    // ✅ โหลดข้อมูลจริงจาก Firestore
-    _loadUserData();
+  ImageProvider? _toImageProvider(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final v = raw.trim();
+    if (v.startsWith('http://') || v.startsWith('https://')) {
+      return NetworkImage(v);
+    }
+    // รองรับทั้ง 'assets/avatars/1.png' หรือ '1.png'
+    if (v.startsWith('assets/')) {
+      return AssetImage(v);
+    }
+    return AssetImage('assets/avatars/$v');
   }
 
   Future<void> _loadUserData() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
-      final doc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      setState(() => _loading = true);
 
-      if (doc.exists) {
-        final data = doc.data()!;
-        setState(() {
-          _username.text = data['username'] ?? '';
-          _name.text = data['displayName'] ?? '';
-          _email.text = data['email'] ?? '';
-          _stuId.text = data['studentId'] ?? '';
-          _classValue = data['className'];
-          _selectedAvatar = data['avatar'] ?? '1.png';
-        });
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        return;
       }
+
+      final authEmail = authUser.email;
+      if (authEmail == null || authEmail.isEmpty) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบอีเมลของผู้ใช้จาก FirebaseAuth')),
+        );
+        return;
+      }
+
+      final qs = await FirebaseFirestore.instance
+          .collection('user') // ← คอลเลกชันตามสคีมาใหม่
+          .where('user_email', isEqualTo: authEmail)
+          .limit(1)
+          .get();
+
+      if (qs.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _email.text = authEmail; // อย่างน้อยให้เห็นอีเมล
+          _loading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบข้อมูลผู้ใช้ในฐานข้อมูลใหม่')),
+        );
+        return;
+      }
+
+      final doc = qs.docs.first;
+      final data = doc.data();
+
+      _docId = doc.id;
+
+      final fullname  = data['user_fullname'] as String?;
+      final username  = data['user_name'] as String?;
+      final email     = data['user_email'] as String?;
+      final userCode  = data['user_code'] as String?;   // ← Student ID
+      final className = data['user_class'] as String?;
+      final userImg   = data['user_img'] as String?;
+
+      if (!mounted) return;
+      setState(() {
+        _name.text = fullname ?? '';
+        _username.text = username ?? '';
+        _email.text = email ?? authEmail;
+        _stuId.text = userCode ?? '';
+        _classValue = className;
+        _selectedAvatarRaw = userImg;
+        _avatarPreview = _toImageProvider(userImg);
+        _loading = false;
+      });
     } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
       debugPrint("Error loading user data: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('โหลดข้อมูลไม่สำเร็จ: $e')),
+      );
     }
   }
 
@@ -143,16 +209,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    try {
-      final uid = FirebaseAuth.instance.currentUser!.uid;
+    if (_docId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่พบเอกสารผู้ใช้ในฐานข้อมูล')),
+      );
+      return;
+    }
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'username': _username.text.trim(),
-        'displayName': _name.text.trim(),
-        'studentId': _stuId.text.trim().isEmpty ? null : _stuId.text.trim(),
-        'className': _classValue,
-        'avatar': _selectedAvatar,
-      });
+    try {
+      // เตรียมค่าที่จะบันทึกกลับสคีมาใหม่
+      final Map<String, dynamic> payload = {
+        'user_name': _username.text.trim(),
+        'user_fullname': _name.text.trim(),
+        'user_class': _classValue,
+        'user_img': _selectedAvatarRaw, // raw (URL หรือ asset path)
+      };
+
+      // เฉพาะนักศึกษาเท่านั้นที่บังคับให้มี user_code (Student ID)
+      final isStudent = widget.role.toLowerCase() == 'student';
+      if (isStudent) {
+        payload['user_code'] =
+            _stuId.text.trim().isEmpty ? null : _stuId.text.trim();
+      }
+
+      await FirebaseFirestore.instance
+          .collection('user')
+          .doc(_docId)
+          .update(payload);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -169,8 +252,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  void _pickAvatar() async {
-    final chosen = await showDialog<String>(
+  Future<void> _pickAvatar() async {
+    final chosenKey = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('เลือก Avatar'),
@@ -185,11 +268,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
             itemCount: 20,
             itemBuilder: (context, index) {
-              final path = '${index + 1}.png';
+              final file = '${index + 1}.png';
+              final assetPath = 'assets/avatars/$file';
               return GestureDetector(
-                onTap: () => Navigator.pop(ctx, path),
+                onTap: () => Navigator.pop(ctx, assetPath),
                 child: CircleAvatar(
-                  backgroundImage: AssetImage('assets/avatars/$path'),
+                  backgroundImage: AssetImage(assetPath),
                   radius: 30,
                 ),
               );
@@ -199,14 +283,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
     );
 
-    if (chosen != null) {
-      setState(() => _selectedAvatar = chosen);
+    if (chosenKey != null) {
+      setState(() {
+        _selectedAvatarRaw = chosenKey;      // เก็บเป็น asset path
+        _avatarPreview = _toImageProvider(chosenKey);
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isStudent = widget.role == 'student';
+    final isStudent = widget.role.toLowerCase() == 'student';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -231,88 +318,93 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(16, _avatarR + 24, 16, 24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _label('Username'),
-                          TextFormField(
-                            controller: _username,
-                            validator: _required,
-                            decoration: _decoration('Username'),
-                          ),
-                          const SizedBox(height: 14),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : SingleChildScrollView(
+                          padding: EdgeInsets.fromLTRB(16, _avatarR + 24, 16, 24),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _label('Username'),
+                                TextFormField(
+                                  controller: _username,
+                                  validator: _required,
+                                  decoration: _decoration('Username'),
+                                ),
+                                const SizedBox(height: 14),
 
-                          _label('Name'),
-                          TextFormField(
-                            controller: _name,
-                            validator: _required,
-                            decoration: _decoration('Name'),
-                          ),
-                          const SizedBox(height: 14),
+                                _label('Name'),
+                                TextFormField(
+                                  controller: _name,
+                                  validator: _required,
+                                  decoration: _decoration('Name'),
+                                ),
+                                const SizedBox(height: 14),
 
-                          _label('Email'),
-                          TextFormField(
-                            controller: _email,
-                            readOnly: true,
-                            decoration: _decoration('Email',
-                                readOnly: true,
-                                fillColor: Colors.grey.shade200),
-                          ),
-                          const SizedBox(height: 14),
+                                _label('Email'),
+                                TextFormField(
+                                  controller: _email,
+                                  readOnly: true,
+                                  decoration: _decoration(
+                                    'Email',
+                                    readOnly: true,
+                                    fillColor: Colors.grey.shade200,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
 
-                          if (isStudent) ...[
-                            _label('Student ID'),
-                            TextFormField(
-                              controller: _stuId,
-                              validator: _required,
-                              decoration: _decoration('Student ID'),
-                            ),
-                            const SizedBox(height: 14),
+                                if (isStudent) ...[
+                                  _label('Student ID'),
+                                  TextFormField(
+                                    controller: _stuId,
+                                    validator: _required,
+                                    decoration: _decoration('Student ID'),
+                                  ),
+                                  const SizedBox(height: 14),
 
-                            _label('Class'),
-                            DropdownButtonFormField<String>(
-                              value: _classValue,
-                              decoration: _decoration('Class'),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'SE-3/1', child: Text('SE-3/1')),
-                                DropdownMenuItem(
-                                    value: 'SE-3/2', child: Text('SE-3/2')),
-                                DropdownMenuItem(
-                                    value: 'SE-4/1', child: Text('SE-4/1')),
+                                  _label('Class'),
+                                  DropdownButtonFormField<String>(
+                                    value: _classValue,
+                                    decoration: _decoration('Class'),
+                                    items: const [
+                                      DropdownMenuItem(
+                                          value: 'SE-3/1', child: Text('SE-3/1')),
+                                      DropdownMenuItem(
+                                          value: 'SE-3/2', child: Text('SE-3/2')),
+                                      DropdownMenuItem(
+                                          value: 'SE-4/1', child: Text('SE-4/1')),
+                                    ],
+                                    onChanged: (v) => setState(() => _classValue = v),
+                                    validator: (v) => (v == null || v.isEmpty)
+                                        ? 'กรุณาเลือกชั้นเรียน'
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 18),
+                                ],
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: EditProfilePage._primary,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: _submit,
+                                    child: const Text(
+                                      'Submit',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                ),
                               ],
-                              onChanged: (v) =>
-                                  setState(() => _classValue = v),
-                              validator: (v) => (v == null || v.isEmpty)
-                                  ? 'กรุณาเลือกชั้นเรียน'
-                                  : null,
-                            ),
-                            const SizedBox(height: 18),
-                          ],
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: EditProfilePage._primary,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                              ),
-                              onPressed: _submit,
-                              child: const Text('Submit',
-                                  style: TextStyle(fontSize: 16)),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
+                        ),
                 ),
               ],
             ),
@@ -327,11 +419,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   children: [
                     CircleAvatar(
                       radius: _avatarR,
-                      backgroundImage: _selectedAvatar != null
-                          ? AssetImage('assets/avatars/$_selectedAvatar')
-                          : null,
+                      backgroundImage: _avatarPreview,
                       backgroundColor: const Color(0xFFE9ECFF),
-                      child: _selectedAvatar == null
+                      child: _avatarPreview == null
                           ? const Icon(Icons.person,
                               size: 34, color: Color(0xFF4B5563))
                           : null,

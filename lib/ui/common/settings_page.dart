@@ -16,11 +16,16 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String? _name;
-  String? _email;
-  String? _role;
-  String? _username;
-  String? _avatar; // ✅ เก็บ path avatar
+  String? _name;        // ← user_fullname
+  String? _email;       // ← user_email (fallback: FirebaseAuth.email)
+  String? _role;        // ← user_role
+  String? _username;    // ← user_name
+  String? _className;   // ← user_class
+  String? _userId;      // ← user_id (int -> string)
+  String? _avatarUrl;   // ← user_img (อาจเป็น URL หรือ asset path)
+  ImageProvider? _avatarImage;
+
+  bool _loading = true;
 
   @override
   void initState() {
@@ -29,20 +34,87 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadUser() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final data = doc.data();
-    if (data == null) return;
+    try {
+      setState(() => _loading = true);
 
-    setState(() {
-      _name = data['displayName'];
-      _email = data['email'];
-      _role = data['role'];
-      _username = data['username'];
-      _avatar = data['avatar']; // ✅ ดึง avatar จาก Firestore
-    });
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        return;
+      }
+
+      final authEmail = authUser.email;
+      if (authEmail == null || authEmail.isEmpty) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบอีเมลของผู้ใช้จาก FirebaseAuth')),
+        );
+        return;
+      }
+
+      // 🔎 สคีมาใหม่: ใช้คอลเลกชัน 'user' และค้นหาด้วย user_email
+      final query = await FirebaseFirestore.instance
+          .collection('user')
+          .where('user_email', isEqualTo: authEmail)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _email = authEmail; // แสดงอย่างน้อยอีเมลจาก Auth
+          _loading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบข้อมูลผู้ใช้ในฐานข้อมูลใหม่')),
+        );
+        return;
+      }
+
+      final data = query.docs.first.data();
+
+      final fullname  = data['user_fullname'] as String?;
+      final username  = data['user_name'] as String?;
+      final email     = data['user_email'] as String?;
+      final role      = data['user_role'] as String?;
+      final className = data['user_class'] as String?;
+      final userId    = data['user_id']?.toString(); // int → string
+      final img       = data['user_img'] as String?;
+
+      ImageProvider? avatarProvider;
+      if (img != null && img.trim().isNotEmpty) {
+        final v = img.trim();
+        if (v.startsWith('http://') || v.startsWith('https://')) {
+          avatarProvider = NetworkImage(v);
+        } else if (v.startsWith('assets/')) {
+          avatarProvider = AssetImage(v);
+        } else {
+          // เก็บเป็น key สั้น ๆ → ชี้ไปโฟลเดอร์ assets/avatars/
+          avatarProvider = AssetImage('assets/avatars/$v');
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _name = fullname ?? 'User';
+        _username = username;
+        _email = email ?? authEmail;
+        _role = role;
+        _className = className;
+        _userId = userId;
+        _avatarUrl = img;
+        _avatarImage = avatarProvider;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('โหลดข้อมูลบัญชีไม่สำเร็จ: $e')),
+      );
+    }
   }
 
   void _logout(BuildContext context) {
@@ -135,99 +207,110 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            // ---------- Header ----------
-            Center(
-              child: Column(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  CircleAvatar(
-                    radius: 38,
-                    backgroundColor: SettingsPage._primary,
-                    backgroundImage: _avatar != null
-                        ? AssetImage('assets/avatars/$_avatar')
-                        : null,
-                    child: _avatar == null
-                        ? const Icon(Icons.person,
-                            size: 40, color: Colors.white)
-                        : null,
+                  // ---------- Header ----------
+                  Center(
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 38,
+                          backgroundColor: SettingsPage._primary,
+                          backgroundImage: _avatarImage,
+                          child: _avatarImage == null
+                              ? const Icon(Icons.person,
+                                  size: 40, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _name ?? 'User',
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w800),
+                        ),
+                        if ((_username ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(_username!,
+                              style: TextStyle(color: SettingsPage._muted)),
+                        ],
+                        if ((_email ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(_email!,
+                              style: TextStyle(color: SettingsPage._muted)),
+                        ],
+                        if ((_role ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _role!,
+                            style: TextStyle(
+                              color: cs.primary.withOpacity(0.7),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                        if ((_className ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _className!,
+                            style: TextStyle(color: SettingsPage._muted),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _name ?? 'User',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w800),
+                  const SizedBox(height: 16),
+
+                  // ---------- Tiles ----------
+                  _SettingTile(
+                    icon: Icons.edit_outlined,
+                    title: 'Edit Account',
+                    subtitle: 'Update your personal information',
+                    onTap: () => context.push(
+                      '/profile/edit',
+                      extra: {
+                        // ส่งข้อมูลตรงจาก DB ใหม่
+                        'role': _role ?? 'Student',
+                        'initial': EditProfileInitial(
+                          username: _username,
+                          name: _name,
+                          email: _email,
+                          studentId: _userId,    // ใช้ user_id เป็นรหัสภายใน
+                          className: _className, // user_class
+                          avatar: _avatarUrl,    // raw (URL/asset) ให้หน้า edit ตัดสินใจต่อ
+                        ),
+                      },
+                    ),
                   ),
-                  if ((_username ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(_username!, style: TextStyle(color: SettingsPage._muted)),
-                  ],
-                  if ((_email ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(_email!, style: TextStyle(color: SettingsPage._muted)),
-                  ],
-                  if ((_role ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      _role!,
-                      style: TextStyle(
-                        color: cs.primary.withOpacity(0.7),
-                        fontWeight: FontWeight.bold,
+                  const SizedBox(height: 10),
+                  _SettingTile(
+                    icon: Icons.lock_reset_outlined,
+                    title: 'Change password',
+                    subtitle: 'Send reset link to your email',
+                    onTap: () => _showResetDialog(context),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ---------- Logout ----------
+                  FilledButton.icon(
+                    onPressed: () => _logout(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: cs.error,
+                      foregroundColor: cs.onError,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ],
+                    icon: const Icon(Icons.logout),
+                    label:
+                        const Text('Logout', style: TextStyle(fontSize: 16)),
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // ---------- Tiles ----------
-            _SettingTile(
-              icon: Icons.edit_outlined,
-              title: 'Edit Account',
-              subtitle: 'Update your personal information',
-              onTap: () => context.push(
-                '/profile/edit',
-                extra: {
-                  'role': 'student',
-                  'initial': EditProfileInitial(
-                    username: _username,
-                    name: _name,
-                    email: _email,
-                    studentId: null,
-                    className: null,
-                    avatar: _avatar, // ✅ ส่ง avatar ไปด้วย
-                  ),
-                },
-              ),
-            ),
-            const SizedBox(height: 10),
-            _SettingTile(
-              icon: Icons.lock_reset_outlined,
-              title: 'Change password',
-              subtitle: 'Send reset link to your email',
-              onTap: () => _showResetDialog(context),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ---------- Logout ----------
-            FilledButton.icon(
-              onPressed: () => _logout(context),
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.error,
-                foregroundColor: cs.onError,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout', style: TextStyle(fontSize: 16)),
-            ),
-          ],
-        ),
       ),
     );
   }

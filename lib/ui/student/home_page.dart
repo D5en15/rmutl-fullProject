@@ -79,7 +79,7 @@ class StudentHomePage extends StatelessWidget {
                 final fullname = data['user_fullname'] ?? "Student";
 
                 // ✅ Debug: Print ค่า PLO ทั้งหมด
-                print("📊 Raw PLO Scores from API: $ploScores");
+                debugPrint("📊 Raw PLO Scores: $ploScores");
 
                 // ✅ หา Top PLO
                 String topPlo = "Unknown";
@@ -95,11 +95,11 @@ class StudentHomePage extends StatelessWidget {
                     desc = val['description'] as String? ?? key;
                   } else {
                     score = (val as num).toDouble();
-                    desc = key; // ✅ fallback ใช้ key
+                    desc = key; // fallback
                   }
 
-                  // 👇 print รายตัว
-                  print("➡️ PLO $key | score = $score | desc = $desc");
+                  // ✅ print รายตัว
+                  debugPrint("➡️ PLO $key | score=$score | desc=$desc");
 
                   if (score > topPloValue) {
                     topPloValue = score;
@@ -511,7 +511,7 @@ class _SkillBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double value = percent.toDouble() / 100.0; // ✅ cast
+    final double value = percent.toDouble() / 100.0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
