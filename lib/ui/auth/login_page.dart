@@ -26,91 +26,104 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
-    final input = emailOrUserController.text.trim();
-    final password = passwordController.text;
+  final input = emailOrUserController.text.trim();
+  final password = passwordController.text;
 
-    if (input.isEmpty || password.isEmpty) {
-      _toast('กรอกอีเมล/ชื่อผู้ใช้ และรหัสผ่าน');
-      return;
-    }
+  if (input.isEmpty || password.isEmpty) {
+    _toast('กรอกอีเมล/ชื่อผู้ใช้ และรหัสผ่าน');
+    return;
+  }
 
-    setState(() => loading = true);
-    try {
-      debugPrint('🔐 login with: $input');
+  setState(() => loading = true);
+  try {
+    debugPrint('🔐 login with: $input');
 
-      String? emailToLogin = input;
+    String? emailToLogin = input;
 
-      // 👉 ถ้า input ไม่ใช่อีเมล → ให้หาจาก Firestore ว่าเป็น username
-      if (!input.contains('@')) {
-        final snap = await FirebaseFirestore.instance
-            .collection('user')
-            .where('user_name', isEqualTo: input)
-            .limit(1)
-            .get();
+    // 👉 ถ้า input ไม่ใช่อีเมล → หา email จาก Firestore โดย username
+    if (!input.contains('@')) {
+      final snap = await FirebaseFirestore.instance
+          .collection('user')
+          .where('user_name', isEqualTo: input)
+          .limit(1)
+          .get();
 
-        if (snap.docs.isEmpty) {
-          _toast('❌ ไม่พบบัญชีผู้ใช้');
-          setState(() => loading = false);
-          return;
-        }
-
-        emailToLogin = snap.docs.first.data()['user_email'] as String?;
-      }
-
-      if (emailToLogin == null || emailToLogin.isEmpty) {
-        _toast('❌ บัญชีนี้ไม่มีอีเมลสำหรับเข้าสู่ระบบ');
+      if (snap.docs.isEmpty) {
+        _toast('❌ ไม่พบบัญชีผู้ใช้');
         setState(() => loading = false);
         return;
       }
 
-      // ✅ Auth ตรวจสอบ email/password
-      final cred = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: emailToLogin, password: password);
-
-      final uid = cred.user!.uid;
-      debugPrint('✅ Auth OK uid=$uid');
-
-      // ✅ ดึงข้อมูล Firestore (collection user)
-      final doc =
-          await FirebaseFirestore.instance.collection('user').doc(uid).get();
-
-      if (!doc.exists) {
-        _toast('❌ ไม่พบบัญชีใน Firestore');
-        return;
-      }
-
-      final data = doc.data()!;
-      final role = (data['user_role'] as String?)?.toLowerCase();
-
-      if (role == null || role.isEmpty) {
-        _toast('❌ บัญชีนี้ไม่มี role');
-        return;
-      }
-
-      _toast('✅ เข้าสู่ระบบสำเร็จ (role=$role)');
-
-      if (!mounted || !navigateAfterLogin) return;
-
-      switch (role) {
-        case 'admin':
-          context.go('/admin');
-          break;
-        case 'teacher':
-          context.go('/teacher');
-          break;
-        default:
-          context.go('/student');
-      }
-    } on FirebaseAuthException catch (e) {
-      debugPrint('❌ Auth error: code=${e.code}, msg=${e.message}');
-      _toast('เข้าสู่ระบบไม่สำเร็จ: ${e.message}');
-    } catch (e) {
-      debugPrint('❌ Unknown: $e');
-      _toast('เกิดข้อผิดพลาด: $e');
-    } finally {
-      if (mounted) setState(() => loading = false);
+      emailToLogin = snap.docs.first.data()['user_email'] as String?;
     }
+
+    if (emailToLogin == null || emailToLogin.isEmpty) {
+      _toast('❌ บัญชีนี้ไม่มีอีเมลสำหรับเข้าสู่ระบบ');
+      setState(() => loading = false);
+      return;
+    }
+
+    // ✅ Auth login
+    final cred = await FirebaseAuth.instance
+        .signInWithEmailAndPassword(email: emailToLogin, password: password);
+
+    final user = cred.user;
+    if (user == null) {
+      _toast('❌ ไม่พบ user หลัง login');
+      return;
+    }
+
+    // 🔑 ดึง Firebase ID Token
+    final token = await user.getIdToken();
+    debugPrint('✅ Firebase ID Token: $token');
+
+    // คุณสามารถเลือก แสดงออกมาบน UI เลยก็ได้ เช่น snackbar
+    _toast("ID Token copied to console");
+
+    // ✅ หา role ต่อ
+    final userSnap = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_email', isEqualTo: emailToLogin)
+        .limit(1)
+        .get();
+
+    if (userSnap.docs.isEmpty) {
+      _toast('❌ ไม่พบบัญชีใน Firestore');
+      return;
+    }
+
+    final data = userSnap.docs.first.data();
+    final role = (data['user_role'] as String?)?.toLowerCase();
+
+    if (role == null || role.isEmpty) {
+      _toast('❌ บัญชีนี้ไม่มี role');
+      return;
+    }
+
+    _toast('✅ เข้าสู่ระบบสำเร็จ (role=$role)');
+
+    if (!mounted || !navigateAfterLogin) return;
+
+    switch (role) {
+      case 'admin':
+        context.go('/admin');
+        break;
+      case 'teacher':
+        context.go('/teacher');
+        break;
+      default:
+        context.go('/student');
+    }
+  } on FirebaseAuthException catch (e) {
+    debugPrint('❌ Auth error: code=${e.code}, msg=${e.message}');
+    _toast('เข้าสู่ระบบไม่สำเร็จ: ${e.message}');
+  } catch (e) {
+    debugPrint('❌ Unknown: $e');
+    _toast('เกิดข้อผิดพลาด: $e');
+  } finally {
+    if (mounted) setState(() => loading = false);
   }
+}
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
