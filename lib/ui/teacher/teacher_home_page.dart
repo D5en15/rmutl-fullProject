@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// ---------- Design tokens ----------
 class _T {
@@ -17,8 +18,48 @@ class TeacherHomePage extends StatefulWidget {
 }
 
 class _TeacherHomePageState extends State<TeacherHomePage> {
-  String? _room = 'Class A';
-  final _rooms = const ['Class A', 'Class B', 'Class C'];
+  String? _teacherName;
+  int _total = 0;
+  int _students = 0;
+  int _teachers = 0;
+  int _admins = 0;
+
+  String? _room; // ✅ null ตอนเริ่มต้น
+  final _rooms = const ['SE66_A', 'SE66_B', 'SE67_A', 'SE67_B'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounts();
+  }
+
+  Future<void> _loadCounts() async {
+    final snap = await FirebaseFirestore.instance.collection('user').get();
+
+    int students = 0, teachers = 0, admins = 0;
+    String? teacherName;
+
+    for (var doc in snap.docs) {
+      final data = doc.data();
+      final role = (data['user_role'] ?? '').toString().toLowerCase();
+
+      if (role == 'student') students++;
+      if (role == 'teacher') teachers++;
+      if (role == 'admin') admins++;
+
+      if (role == 'teacher' && teacherName == null) {
+        teacherName = data['user_fullname'] ?? data['user_name'] ?? 'Teacher';
+      }
+    }
+
+    setState(() {
+      _students = students;
+      _teachers = teachers;
+      _admins = admins;
+      _total = students + teachers + admins;
+      _teacherName = teacherName;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +69,17 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
         bottom: false,
         child: SingleChildScrollView(
           child: Column(
-            children: const [
-              _BlueHeader(),
-              _Body(),
+            children: [
+              _BlueHeader(teacherName: _teacherName ?? 'Teacher'),
+              _Body(
+                total: _total,
+                students: _students,
+                teachers: _teachers,
+                admins: _admins,
+                room: _room,
+                rooms: _rooms,
+                onRoomChanged: (v) => setState(() => _room = v),
+              ),
             ],
           ),
         ),
@@ -39,9 +88,10 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   }
 }
 
-/// ---------- BLUE HEADER (icons centered vertically with title) ----------
+/// ---------- BLUE HEADER ----------
 class _BlueHeader extends StatelessWidget {
-  const _BlueHeader();
+  const _BlueHeader({required this.teacherName});
+  final String teacherName;
 
   @override
   Widget build(BuildContext context) {
@@ -52,32 +102,29 @@ class _BlueHeader extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Center title & subtitle
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Text(
-                'Hi, Smith',
-                style: TextStyle(
+                'Hi, $teacherName',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: .2,
                 ),
               ),
-              SizedBox(height: 4),
-              Text(
-                "Let's start learning",
+              const SizedBox(height: 4),
+              const Text(
+                "Let's start teaching",
                 style: TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ],
           ),
-
-          // Left: bell
           Align(
             alignment: Alignment.centerLeft,
             child: InkWell(
-              onTap: () => context.go('/teacher/notifications'),
+              onTap: () => context.go('/notifications'),
               borderRadius: BorderRadius.circular(24),
               child: const Padding(
                 padding: EdgeInsets.all(6),
@@ -86,8 +133,6 @@ class _BlueHeader extends StatelessWidget {
               ),
             ),
           ),
-
-          // Right: avatar
           Align(
             alignment: Alignment.centerRight,
             child: InkWell(
@@ -108,7 +153,20 @@ class _BlueHeader extends StatelessWidget {
 
 /// ---------- BODY ----------
 class _Body extends StatelessWidget {
-  const _Body();
+  const _Body({
+    required this.total,
+    required this.students,
+    required this.teachers,
+    required this.admins,
+    required this.room,
+    required this.rooms,
+    required this.onRoomChanged,
+  });
+
+  final int total, students, teachers, admins;
+  final String? room;
+  final List<String> rooms;
+  final ValueChanged<String> onRoomChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -119,63 +177,89 @@ class _Body extends StatelessWidget {
         children: [
           // Top stats 2x2
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: _InfoCard(
-                  icon: Icons.groups_2_outlined,
-                  value: '244',
-                  label: 'Total users',
-                ),
+                    icon: Icons.groups_2_outlined,
+                    value: '$total',
+                    label: 'Total users'),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _InfoCard(
-                  icon: Icons.person_outline,
-                  value: '180',
-                  label: 'Students',
-                ),
+                    icon: Icons.person_outline,
+                    value: '$students',
+                    label: 'Students'),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: _InfoCard(
-                  icon: Icons.school_outlined,
-                  value: '42',
-                  label: 'Teachers',
-                ),
+                    icon: Icons.school_outlined,
+                    value: '$teachers',
+                    label: 'Teachers'),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _InfoCard(
-                  icon: Icons.admin_panel_settings_outlined,
-                  value: '22',
-                  label: 'Admins',
-                ),
+                    icon: Icons.admin_panel_settings_outlined,
+                    value: '$admins',
+                    label: 'Admins'),
               ),
             ],
           ),
-
           const SizedBox(height: 18),
+
           const Text('Select room',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
 
-          // Dropdown
-          _RoomDropdown(),
+          // ✅ Dropdown: มี "เลือกห้องเรียน" เป็นค่า default
+          Container(
+            decoration: BoxDecoration(
+              color: _T.soft,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _T.cardBorder),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: room,
+                hint: const Text('เลือกห้องเรียน'),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                isExpanded: true,
+                items: rooms
+                    .map((r) =>
+                        DropdownMenuItem(value: r, child: Text(r)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) onRoomChanged(v);
+                },
+              ),
+            ),
+          ),
 
           const SizedBox(height: 12),
 
-          // ---------- CTA (อัปเดตสีตามที่ขอ) ----------
+          // ✅ ปุ่มดูนักเรียนเฉพาะห้อง
           SizedBox(
             height: 48,
             child: ElevatedButton(
-              onPressed: () => context.go('/teacher/students'),
+              onPressed: () {
+                if (room == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("กรุณาเลือกห้องเรียนก่อน")),
+                  );
+                  return;
+                }
+                context.push('/teacher/students', extra: {'class': room});
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3D5CFF),   // ✅ สีปุ่ม
-                foregroundColor: Colors.white,   // ✅ สีข้อความ
+                backgroundColor: _T.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -184,73 +268,32 @@ class _Body extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
 
-          // Rings
-          Row(
-            children: const [
-              Expanded(
-                child: _RingCard(
-                  title: 'Total students',
-                  percentText: '34%',
-                  percent: .34,
-                  showAlertNote: true,
+          // ✅ ปุ่มดูนักศึกษาทั้งหมด
+          SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push('/teacher/students/all'),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: _T.primary, width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: _RingCard(
-                  title: 'Attendance',
-                  percentText: '95%',
-                  percent: .95,
-                  showAlertNote: false,
-                ),
+              icon: const Icon(Icons.people_outline, color: _T.primary),
+              label: const Text(
+                "View All Students",
+                style: TextStyle(color: _T.primary, fontWeight: FontWeight.w700),
               ),
-            ],
+            ),
           ),
-
-          const SizedBox(height: 18),
-          const _GradeDistributionCard(),
         ],
       ),
     );
   }
 }
 
-class _RoomDropdown extends StatefulWidget {
-  @override
-  State<_RoomDropdown> createState() => _RoomDropdownState();
-}
-
-class _RoomDropdownState extends State<_RoomDropdown> {
-  String? _room = 'Class A';
-  final _rooms = const ['Class A', 'Class B', 'Class C'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _T.soft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _T.cardBorder),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _room,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-          isExpanded: true,
-          items: _rooms
-              .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-              .toList(),
-          onChanged: (v) => setState(() => _room = v),
-        ),
-      ),
-    );
-  }
-}
-
-/// ---------- Widgets ----------
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
     required this.icon,
@@ -304,159 +347,4 @@ class _InfoCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RingCard extends StatelessWidget {
-  const _RingCard({
-    required this.title,
-    required this.percentText,
-    required this.percent,
-    required this.showAlertNote,
-  });
-
-  final String title;
-  final String percentText;
-  final double percent;
-  final bool showAlertNote;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 118,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.cardBorder),
-        boxShadow: const [
-          BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4)),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 58,
-            height: 58,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CircularProgressIndicator(
-                  value: percent.clamp(0, 1),
-                  strokeWidth: 7,
-                  backgroundColor: _T.cardBorder,
-                  color: _T.primary,
-                ),
-                Center(
-                  child: Text(percentText,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 6),
-                if (showAlertNote)
-                  Row(
-                    children: const [
-                      Icon(Icons.circle, size: 8, color: Color(0xFFFF7A50)),
-                      SizedBox(width: 6),
-                      Text('34% alerts',
-                          style: TextStyle(fontSize: 12, color: _T.muted)),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GradeDistributionCard extends StatelessWidget {
-  const _GradeDistributionCard();
-
-  @override
-  Widget build(BuildContext context) {
-    const data = [1.0, 2.1, 2.7, 2.4, 3.2, 4.0];
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.cardBorder),
-        boxShadow: const [
-          BoxShadow(color: _T.shadow, blurRadius: 12, offset: Offset(0, 4)),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Grade distribution',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 170,
-            width: double.infinity,
-            child: CustomPaint(painter: _LineChartPainter(data)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LineChartPainter extends CustomPainter {
-  _LineChartPainter(this.data);
-  final List<double> data;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()..color = const Color(0xFFEFF1F7)..strokeWidth = 1;
-    final border = Paint()..color = const Color(0xFFE1E3EC)..strokeWidth = 1;
-
-    const steps = 4;
-    for (var i = 0; i <= steps; i++) {
-      final y = size.height * (i / steps);
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        i == steps ? border : grid,
-      );
-    }
-
-    const maxY = 4.0, minY = 0.0;
-    final dx = size.width / (data.length - 1);
-    final path = Path();
-    final line = Paint()
-      ..color = _T.primary
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-    final dot = Paint()..color = _T.primary;
-
-    for (var i = 0; i < data.length; i++) {
-      final x = i * dx;
-      final v = data[i].clamp(minY, maxY);
-      final y = size.height - ((v - minY) / (maxY - minY)) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-      canvas.drawCircle(Offset(x, y), 3.5, dot);
-    }
-    canvas.drawPath(path, line);
-  }
-
-  @override
-  bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
-      oldDelegate.data != data;
 }

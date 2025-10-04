@@ -1,6 +1,6 @@
+// lib/ui/admin/user_add_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class UserAddPage extends StatefulWidget {
   const UserAddPage({super.key});
@@ -14,52 +14,49 @@ class _UserAddPageState extends State<UserAddPage> {
   final _formKey = GlobalKey<FormState>();
 
   final _username = TextEditingController();
+  final _fullname = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  String _role = "teacher"; // ค่า default
+  final _className = TextEditingController();
+  final _userCode = TextEditingController();
+  String _role = "Student";
   bool _loading = false;
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
     setState(() => _loading = true);
 
-    final auth = FirebaseAuth.instance;
-    final currentUser = auth.currentUser;
-    final currentEmail = currentUser?.email;
-    final currentToken = await currentUser?.getIdToken(true);
-
     try {
-      // ✅ สร้าง user ใหม่
-      final newUser = await auth.createUserWithEmailAndPassword(
-        email: _email.text.trim(),
-        password: _password.text.trim(),
-      );
+      final userRef = FirebaseFirestore.instance.collection('user');
 
-      // ✅ บันทึก Firestore
-      await FirebaseFirestore.instance.collection("users").doc(newUser.user!.uid).set({
-        "username": _username.text.trim(),
-        "email": _email.text.trim(),
-        "role": _role,
-        "displayName": _username.text.trim(),
-        "createdAt": FieldValue.serverTimestamp(),
+      // ✅ หา user_id ล่าสุด แล้ว +1
+      final last = await userRef.orderBy('user_id', descending: true).limit(1).get();
+      int nextId = 1;
+      if (last.docs.isNotEmpty) {
+        final lastId = int.tryParse(last.docs.first['user_id'].toString());
+        nextId = (lastId ?? 0) + 1;
+      }
+      final newUserId = nextId.toString().padLeft(5, '0');
+
+      // ✅ เพิ่มข้อมูลผู้ใช้ใหม่
+      await userRef.add({
+        'user_id': newUserId,
+        'user_code': _userCode.text.trim(),
+        'user_name': _username.text.trim(),
+        'user_fullname': _fullname.text.trim(),
+        'user_email': _email.text.trim(),
+        'user_password': _password.text.trim(),
+        'user_role': _role,
+        'user_class': _className.text.trim(),
+        'user_img': 'https://example.com/default-avatar.png', // ตั้งค่าเริ่มต้น
+        'created_at': FieldValue.serverTimestamp(),
       });
 
-      // ✅ กลับมา login เป็น admin เดิม
-      if (currentEmail != null && currentToken != null) {
-        // ต้องเก็บรหัสผ่าน admin ไว้ด้วย (ตรงนี้ต้อง hardcode / input เอง)
-        await auth.signInWithEmailAndPassword(
-          email: currentEmail,
-          password: "ADMIN_PASSWORD_HERE", // 👈 ต้องใส่รหัสจริงของ admin
-        );
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("เพิ่มผู้ใช้สำเร็จ และกลับมาเป็น admin แล้ว")),
-        );
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("✅ เพิ่มผู้ใช้งานสำเร็จ")),
+      );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -72,9 +69,24 @@ class _UserAddPageState extends State<UserAddPage> {
   }
 
   @override
+  void dispose() {
+    _username.dispose();
+    _fullname.dispose();
+    _email.dispose();
+    _password.dispose();
+    _className.dispose();
+    _userCode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("เพิ่มผู้ใช้งาน")),
+      appBar: AppBar(
+        title: const Text("เพิ่มผู้ใช้งานใหม่"),
+        backgroundColor: _primary,
+        foregroundColor: Colors.white,
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -83,35 +95,53 @@ class _UserAddPageState extends State<UserAddPage> {
             child: ListView(
               children: [
                 TextFormField(
+                  controller: _userCode,
+                  decoration: const InputDecoration(labelText: "รหัสผู้ใช้ (User Code)"),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
                   controller: _username,
-                  decoration: const InputDecoration(labelText: "Username"),
+                  decoration: const InputDecoration(labelText: "ชื่อบัญชีผู้ใช้ (Username)"),
                   validator: (v) =>
-                      v == null || v.isEmpty ? "กรุณากรอก Username" : null,
+                      v == null || v.isEmpty ? "กรุณากรอกชื่อบัญชี" : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _fullname,
+                  decoration: const InputDecoration(labelText: "ชื่อ-นามสกุล"),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? "กรุณากรอกชื่อจริง" : null,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _email,
-                  decoration: const InputDecoration(labelText: "Email"),
+                  decoration: const InputDecoration(labelText: "อีเมล (Email)"),
                   validator: (v) =>
-                      v == null || v.isEmpty ? "กรุณากรอก Email" : null,
+                      v == null || v.isEmpty ? "กรุณากรอกอีเมล" : null,
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _password,
-                  decoration: const InputDecoration(labelText: "Password"),
+                  decoration: const InputDecoration(labelText: "รหัสผ่าน (Password)"),
                   obscureText: true,
                   validator: (v) =>
-                      v == null || v.length < 6 ? "รหัสผ่าน ≥ 6 ตัว" : null,
+                      v == null || v.length < 6 ? "รหัสผ่านต้อง ≥ 6 ตัวอักษร" : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _className,
+                  decoration: const InputDecoration(labelText: "ห้องเรียน (Class)"),
                 ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   value: _role,
-                  decoration: const InputDecoration(labelText: "Role"),
+                  decoration: const InputDecoration(labelText: "บทบาทผู้ใช้ (Role)"),
                   items: const [
-                    DropdownMenuItem(value: "teacher", child: Text("Teacher")),
-                    DropdownMenuItem(value: "admin", child: Text("Admin")),
+                    DropdownMenuItem(value: "Student", child: Text("Student")),
+                    DropdownMenuItem(value: "Teacher", child: Text("Teacher")),
+                    DropdownMenuItem(value: "Admin", child: Text("Admin")),
                   ],
-                  onChanged: (v) => setState(() => _role = v ?? "teacher"),
+                  onChanged: (v) => setState(() => _role = v ?? "Student"),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -128,7 +158,7 @@ class _UserAddPageState extends State<UserAddPage> {
                     onPressed: _loading ? null : _submit,
                     child: _loading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("เพิ่มผู้ใช้"),
+                        : const Text("เพิ่มผู้ใช้งาน"),
                   ),
                 ),
               ],

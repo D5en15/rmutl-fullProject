@@ -8,6 +8,7 @@ class UserEditFormPage extends StatefulWidget {
     required this.userId,
     required this.email,
   });
+
   final String userId;
   final String email;
 
@@ -19,12 +20,11 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
   static const _primary = Color(0xFF3D5CFF);
   final _form = GlobalKey<FormState>();
 
-  final _username = TextEditingController();
-  final _name = TextEditingController();
+  final _userName = TextEditingController();
+  final _fullName = TextEditingController();
   final _email = TextEditingController();
-  final _studentId = TextEditingController();
-  String? _classValue;
-  String _role = 'student';
+  final _className = TextEditingController();
+  String _role = 'Student';
   String? _selectedAvatar;
 
   @override
@@ -37,52 +37,26 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
   Future<void> _loadUser() async {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('user')
           .doc(widget.userId)
           .get();
+
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
-          _username.text = data['username'] ?? '';
-          _name.text = data['displayName'] ?? '';
-          _studentId.text = data['studentId'] ?? '';
-          _classValue = data['className'];
-          _role = data['role'] ?? 'student';
-          _selectedAvatar = data['avatar'] ?? '1.png';
+          _userName.text = data['user_name'] ?? '';
+          _fullName.text = data['user_fullname'] ?? '';
+          _className.text = data['user_class'] ?? '';
+          _role = data['user_role'] ?? 'Student';
+          _selectedAvatar = data['user_img'] ?? '';
         });
       }
     } catch (e) {
-      debugPrint("Error load user: $e");
+      debugPrint("Error loading user: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("เกิดข้อผิดพลาดในการโหลดข้อมูล: $e")),
+      );
     }
-  }
-
-  @override
-  void dispose() {
-    _username.dispose();
-    _name.dispose();
-    _email.dispose();
-    _studentId.dispose();
-    super.dispose();
-  }
-
-  InputDecoration _decoration(String label,
-      {bool readOnly = false, Color? fillColor}) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: fillColor ?? Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _primary, width: 1.5),
-      ),
-    );
   }
 
   Future<void> _submit() async {
@@ -90,20 +64,19 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
 
     try {
       await FirebaseFirestore.instance
-          .collection('users')
+          .collection('user')
           .doc(widget.userId)
           .update({
-        'username': _username.text.trim(),
-        'displayName': _name.text.trim(),
-        'studentId': _studentId.text.trim(),
-        'className': _classValue,
-        'avatar': _selectedAvatar,
-        'role': _role, // ✅ update role ด้วย
+        'user_name': _userName.text.trim(),
+        'user_fullname': _fullName.text.trim(),
+        'user_class': _className.text.trim(),
+        'user_role': _role,
+        'user_img': _selectedAvatar ?? '',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ')),
+          const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ ✅')),
         );
         context.pop();
       }
@@ -113,6 +86,43 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
           SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _confirmAndDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ลบผู้ใช้งาน'),
+        content: const Text('คุณต้องการลบผู้ใช้งานคนนี้หรือไม่?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('ลบ', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('user')
+          .doc(widget.userId)
+          .delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ลบผู้ใช้งานเรียบร้อย ✅')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ลบไม่สำเร็จ: $e')),
+      );
     }
   }
 
@@ -151,44 +161,25 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
     }
   }
 
-  // -------------------- DELETE USER (Firestore doc) --------------------
-  Future<void> _confirmAndDelete() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('ลบผู้ใช้งาน'),
-        content: const Text('ยืนยันการลบผู้ใช้งานคนนี้หรือไม่?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ลบ', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+  InputDecoration _decoration(String label,
+      {bool readOnly = false, Color? fillColor}) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: fillColor ?? Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE5E7F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _primary, width: 1.5),
       ),
     );
-
-    if (ok != true) return;
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .delete();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ลบผู้ใช้งานเรียบร้อย')),
-      );
-      context.pop(); // กลับไปหน้ารายชื่อ
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ลบไม่สำเร็จ: $e')),
-      );
-    }
   }
-  // ---------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -202,23 +193,21 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
           children: [
             Column(
               children: [
-                // ✅ Blue header
+                // 🔹 Blue Header
                 Container(
                   height: headerH,
                   width: double.infinity,
                   color: _primary,
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Stack(
                     children: [
                       Align(
                         alignment: Alignment.topLeft,
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                              color: Colors.white),
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
                           onPressed: () => context.pop(),
                         ),
                       ),
-                      // ✅ ปุ่มลบ (มุมขวาบน)
                       Align(
                         alignment: Alignment.topRight,
                         child: IconButton(
@@ -230,7 +219,8 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                     ],
                   ),
                 ),
-                // ✅ Form body
+
+                // 🔹 Form Body
                 Expanded(
                   child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(16, avatarR + 24, 16, 24),
@@ -240,18 +230,18 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           TextFormField(
-                            controller: _username,
-                            decoration: _decoration("Username"),
+                            controller: _userName,
+                            decoration: _decoration("ชื่อบัญชีผู้ใช้ (Username)"),
                             validator: (v) =>
-                                v == null || v.isEmpty ? "Required" : null,
+                                v == null || v.isEmpty ? "จำเป็นต้องกรอก" : null,
                           ),
                           const SizedBox(height: 14),
 
                           TextFormField(
-                            controller: _name,
-                            decoration: _decoration("Name"),
+                            controller: _fullName,
+                            decoration: _decoration("ชื่อ-นามสกุล"),
                             validator: (v) =>
-                                v == null || v.isEmpty ? "Required" : null,
+                                v == null || v.isEmpty ? "จำเป็นต้องกรอก" : null,
                           ),
                           const SizedBox(height: 14),
 
@@ -259,47 +249,26 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                             controller: _email,
                             readOnly: true,
                             decoration: _decoration(
-                              "Email",
+                              "อีเมล (Email)",
                               readOnly: true,
                               fillColor: Colors.grey.shade200,
                             ),
                           ),
                           const SizedBox(height: 14),
 
-                          if (_role == 'student') ...[
-                            TextFormField(
-                              controller: _studentId,
-                              decoration: _decoration("Student ID"),
-                            ),
-                            const SizedBox(height: 14),
-                            DropdownButtonFormField<String>(
-                              value: _classValue,
-                              decoration: _decoration("Class"),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'SE-3/1', child: Text('SE-3/1')),
-                                DropdownMenuItem(
-                                    value: 'SE-3/2', child: Text('SE-3/2')),
-                                DropdownMenuItem(
-                                    value: 'SE-4/1', child: Text('SE-4/1')),
-                              ],
-                              onChanged: (v) =>
-                                  setState(() => _classValue = v),
-                            ),
-                            const SizedBox(height: 14),
-                          ],
+                          TextFormField(
+                            controller: _className,
+                            decoration: _decoration("ห้องเรียน (Class)"),
+                          ),
+                          const SizedBox(height: 14),
 
-                          // Role dropdown (admin เปลี่ยนได้)
                           DropdownButtonFormField<String>(
                             value: _role,
-                            decoration: _decoration("Role"),
+                            decoration: _decoration("บทบาทผู้ใช้ (Role)"),
                             items: const [
-                              DropdownMenuItem(
-                                  value: 'student', child: Text('Student')),
-                              DropdownMenuItem(
-                                  value: 'teacher', child: Text('Teacher')),
-                              DropdownMenuItem(
-                                  value: 'admin', child: Text('Admin')),
+                              DropdownMenuItem(value: 'Student', child: Text('Student')),
+                              DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
+                              DropdownMenuItem(value: 'Admin', child: Text('Admin')),
                             ],
                             onChanged: (v) => setState(() => _role = v ?? _role),
                           ),
@@ -318,7 +287,7 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              child: const Text("Submit"),
+                              child: const Text("บันทึกข้อมูล"),
                             ),
                           ),
                         ],
@@ -328,7 +297,8 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                 ),
               ],
             ),
-            // ✅ Avatar + ปุ่มแก้ไข
+
+            // 🔹 Avatar + ปุ่มเปลี่ยน
             Positioned(
               top: headerH - avatarR,
               left: 0,
@@ -338,11 +308,15 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                   children: [
                     CircleAvatar(
                       radius: avatarR,
-                      backgroundImage: _selectedAvatar != null
-                          ? AssetImage('assets/avatars/$_selectedAvatar')
-                          : null,
+                      backgroundImage: _selectedAvatar != null &&
+                              _selectedAvatar!.isNotEmpty
+                          ? (_selectedAvatar!.startsWith('http')
+                              ? NetworkImage(_selectedAvatar!)
+                              : AssetImage('assets/avatars/$_selectedAvatar'))
+                          : null as ImageProvider?,
                       backgroundColor: const Color(0xFFE9ECFF),
-                      child: _selectedAvatar == null
+                      child: (_selectedAvatar == null ||
+                              _selectedAvatar!.isEmpty)
                           ? const Icon(Icons.person,
                               size: 34, color: Color(0xFF4B5563))
                           : null,
@@ -358,11 +332,11 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
                             color: Colors.white,
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.edit,
-                              size: 18, color: _primary),
+                          child:
+                              const Icon(Icons.edit, size: 18, color: _primary),
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),

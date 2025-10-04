@@ -5,15 +5,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
-///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -48,6 +39,8 @@ class DefaultFirebaseOptions {
     authDomain: 'rmutl-fullproject.firebaseapp.com',
     storageBucket: 'rmutl-fullproject.firebasestorage.app',
     measurementId: 'G-ZTW770HRL3',
+    databaseURL:
+        'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -56,6 +49,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
     storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    databaseURL:
+        'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -65,6 +60,8 @@ class DefaultFirebaseOptions {
     projectId: 'rmutl-fullproject',
     storageBucket: 'rmutl-fullproject.firebasestorage.app',
     iosBundleId: 'com.example.flutterProject',
+    databaseURL:
+        'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -74,6 +71,8 @@ class DefaultFirebaseOptions {
     projectId: 'rmutl-fullproject',
     storageBucket: 'rmutl-fullproject.firebasestorage.app',
     iosBundleId: 'com.example.flutterProject',
+    databaseURL:
+        'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -84,5 +83,7 @@ class DefaultFirebaseOptions {
     authDomain: 'rmutl-fullproject.firebaseapp.com',
     storageBucket: 'rmutl-fullproject.firebasestorage.app',
     measurementId: 'G-D6KJLX53P4',
+    databaseURL:
+        'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
 }

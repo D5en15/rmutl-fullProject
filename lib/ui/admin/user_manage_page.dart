@@ -1,3 +1,4 @@
+// lib/ui/admin/user_manage_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,7 +31,7 @@ class _UserManagePageState extends State<UserManagePage> {
   Future<void> _load() async {
     try {
       final colRef = FirebaseFirestore.instance
-          .collection('users')
+          .collection('user')
           .withConverter<Map<String, dynamic>>(
             fromFirestore: (snap, _) => snap.data() ?? {},
             toFirestore: (data, _) => data,
@@ -39,17 +40,19 @@ class _UserManagePageState extends State<UserManagePage> {
       final snap = (_filterRole != null &&
               _filterRole!.isNotEmpty &&
               _filterRole != "เลือกบทบาท")
-          ? await colRef.where('role', isEqualTo: _filterRole!.toLowerCase()).get()
+          ? await colRef.where('user_role', isEqualTo: _filterRole).get()
           : await colRef.get();
 
       final data = snap.docs.map((d) {
         final map = d.data();
         return {
           'id': d.id,
-          'studentId': map['studentId'] ?? '',
-          'displayName': map['displayName'] ?? '',
-          'className': map['className'] ?? '',
-          'email': map['email'] ?? '',
+          'user_id': map['user_id'] ?? '',
+          'user_fullname': map['user_fullname'] ?? '',
+          'user_class': map['user_class'] ?? '',
+          'user_email': map['user_email'] ?? '',
+          'user_role': map['user_role'] ?? '',
+          'user_img': map['user_img'] ?? '',
         };
       }).toList();
 
@@ -75,21 +78,18 @@ class _UserManagePageState extends State<UserManagePage> {
     final filtered = q.isEmpty
         ? _users
         : _users.where((u) {
-            return (u['studentId'] as String).toLowerCase().contains(q) ||
-                (u['displayName'] as String).toLowerCase().contains(q) ||
-                (u['className'] as String).toLowerCase().contains(q);
+            return (u['user_email'] as String).toLowerCase().contains(q) ||
+                (u['user_fullname'] as String).toLowerCase().contains(q) ||
+                (u['user_class'] as String).toLowerCase().contains(q);
           }).toList();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('User list'),
+        title: const Text('User List'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // ✅ เปิดหน้าเพิ่มผู้ใช้งานใหม่
-              context.go('/admin/users/add');
-            },
+            onPressed: () => context.go('/admin/users/add'),
           ),
         ],
       ),
@@ -104,7 +104,7 @@ class _UserManagePageState extends State<UserManagePage> {
                     controller: _controller,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Search by Student ID / Name / Class',
+                      hintText: 'ค้นหาด้วยชื่อ / อีเมล / ห้องเรียน',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
                       fillColor: const Color(0xFFF6F7FF),
@@ -128,24 +128,31 @@ class _UserManagePageState extends State<UserManagePage> {
                           itemBuilder: (_, i) {
                             final user = filtered[i];
                             return ListTile(
-                              leading: _InitialsAvatar(
-                                  name: user['displayName'].isNotEmpty
-                                      ? user['displayName']
-                                      : user['studentId']),
+                              leading: user['user_img'] != null &&
+                                      (user['user_img'] as String).isNotEmpty
+                                  ? CircleAvatar(
+                                      backgroundImage:
+                                          NetworkImage(user['user_img']),
+                                    )
+                                  : _InitialsAvatar(
+                                      name: user['user_fullname']),
                               title: Text(
-                                user['displayName'].isNotEmpty
-                                    ? user['displayName']
+                                user['user_fullname'].isNotEmpty
+                                    ? user['user_fullname']
                                     : "(No Name)",
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w700),
                               ),
                               subtitle: Text(
-                                  "ID: ${user['studentId']} • Class: ${user['className']}"),
+                                user['user_email'].isNotEmpty
+                                    ? "Email: ${user['user_email']}"
+                                    : "(no email)",
+                              ),
                               trailing:
                                   const Icon(Icons.chevron_right_rounded),
                               onTap: () {
                                 final id = user['id'];
-                                final email = user['email'];
+                                final email = user['user_email'];
                                 context.go('/admin/users/$id?email=$email');
                               },
                             );

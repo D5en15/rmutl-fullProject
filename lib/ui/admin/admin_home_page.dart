@@ -25,16 +25,24 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   Future<void> _loadCounts() async {
-    final snap = await FirebaseFirestore.instance.collection('users').get();
+    // ✅ ใช้ collection 'user' (ไม่มี s)
+    final snap = await FirebaseFirestore.instance.collection('user').get();
     int students = 0, teachers = 0, admins = 0;
 
     for (var doc in snap.docs) {
-      final role = doc['role'] ?? '';
+      final data = doc.data();
+      final role = (data['user_role'] ?? '').toString().toLowerCase();
+
       if (role == 'student') students++;
       if (role == 'teacher') teachers++;
       if (role == 'admin') admins++;
+
+      // ✅ ดึงชื่อแอดมินคนแรก
       if (role == 'admin' && _adminName == null) {
-        _adminName = doc['displayName'] ?? 'Admin';
+        _adminName = data['user_fullname'] ??
+            data['user_name'] ??
+            data['user_email'] ??
+            'Admin';
       }
     }
 
@@ -230,8 +238,7 @@ class _Body extends StatelessWidget {
                   'Teacher',
                   'Admin',
                 ]
-                    .map((r) =>
-                        DropdownMenuItem(value: r, child: Text(r)))
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                     .toList(),
                 onChanged: (v) {
                   if (v != null) onRoleChanged(v);
@@ -249,16 +256,15 @@ class _Body extends StatelessWidget {
               onPressed: () {
                 if (selectedRole == 'เลือกบทบาท') {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text("กรุณาเลือกบทบาทก่อน")),
+                    const SnackBar(content: Text("กรุณาเลือกบทบาทก่อน")),
                   );
                   return;
                 }
 
                 String? roleKey;
-                if (selectedRole == 'Student') roleKey = 'student';
-                else if (selectedRole == 'Teacher') roleKey = 'teacher';
-                else if (selectedRole == 'Admin') roleKey = 'admin';
+                if (selectedRole == 'Student') roleKey = 'Student';
+                else if (selectedRole == 'Teacher') roleKey = 'Teacher';
+                else if (selectedRole == 'Admin') roleKey = 'Admin';
 
                 context.push(
                   '/admin/users',
