@@ -1,4 +1,3 @@
-// lib/ui/forum/forum_list_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,8 +9,41 @@ const Color kForumMuted = Color(0xFF8B90A0);
 const Color kForumChipBg = Color(0xFFF4F6FA);
 const double kCardRadius = 12.0;
 
-class ForumListPage extends StatelessWidget {
+class ForumListPage extends StatefulWidget {
   const ForumListPage({super.key});
+
+  @override
+  State<ForumListPage> createState() => _ForumListPageState();
+}
+
+class _ForumListPageState extends State<ForumListPage> {
+  String? _currentUserId; // ✅ user_id (จาก collection user)
+  String? _role;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snap = await FirebaseFirestore.instance
+        .collection("user")
+        .where("user_email", isEqualTo: user.email)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isNotEmpty) {
+      final data = snap.docs.first.data();
+      setState(() {
+        _currentUserId = data["user_id"].toString();
+        _role = data["user_role"] ?? "student";
+      });
+    }
+  }
 
   String _detectRole(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
@@ -38,7 +70,6 @@ class ForumListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final role = _detectRole(context);
     final base = _baseOf(role);
-    final currentUser = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -55,8 +86,8 @@ class ForumListPage extends StatelessWidget {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('posts')
-            .orderBy('createdAt', descending: true)
+            .collection('post') // ✅ collection ใหม่
+            .orderBy('post_time', descending: true) // ✅ field ใหม่
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -70,10 +101,11 @@ class ForumListPage extends StatelessWidget {
             final data = d.data() as Map<String, dynamic>;
             return _Post(
               id: d.id,
-              detail: data['content'] ?? '',
+              title: data['post_title'] ?? '',
+              detail: data['post_content'] ?? '',
+              authorId: data['user_id'] ?? '',
               authorName: data['authorName'] ?? 'Unknown',
-              authorId: data['authorId'] ?? '',
-              createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+              createdAt: (data['post_time'] as Timestamp?)?.toDate(),
             );
           }).toList();
 
@@ -88,7 +120,7 @@ class ForumListPage extends StatelessWidget {
                 timeText: p.createdAt != null ? _timeAgo(p.createdAt!) : "",
                 onTap: () => context.push('$base/forum/${p.id}'),
                 onView: () => context.push('$base/forum/${p.id}'),
-                canManage: role == 'admin' || p.authorId == currentUser?.uid,
+                canManage: (_role == 'admin') || (_currentUserId == p.authorId),
                 base: base,
               );
             },
@@ -102,15 +134,17 @@ class ForumListPage extends StatelessWidget {
 /// ---------- Model ----------
 class _Post {
   final String id;
+  final String title;
   final String detail;
-  final String authorName;
   final String authorId;
+  final String authorName;
   final DateTime? createdAt;
   const _Post({
     required this.id,
+    required this.title,
     required this.detail,
-    required this.authorName,
     required this.authorId,
+    required this.authorName,
     required this.createdAt,
   });
 }
@@ -133,12 +167,24 @@ class _PostCard extends StatelessWidget {
   final bool canManage;
   final String base;
 
+  /// ✅ แก้ไขตรงนี้: ลบทั้งโพสต์ + sub-collection comments
   Future<void> _deletePost(BuildContext context) async {
     try {
-      await FirebaseFirestore.instance.collection('posts').doc(post.id).delete();
+      final postRef =
+          FirebaseFirestore.instance.collection('post').doc(post.id);
+
+      // ลบ sub-collection comments ก่อน
+      final comments = await postRef.collection('comments').get();
+      for (var c in comments.docs) {
+        await c.reference.delete();
+      }
+
+      // ลบ document ของโพสต์
+      await postRef.delete();
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ลบโพสต์สำเร็จ')),
+          const SnackBar(content: Text('ลบโพสต์และความคิดเห็นสำเร็จ')),
         );
       }
     } catch (e) {
@@ -209,13 +255,24 @@ class _PostCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
+                post.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: kForumTextDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 post.detail,
-                maxLines: 3, // ✅ จำกัดแค่ 3 บรรทัด
-                overflow: TextOverflow.ellipsis, // ✅ เกินจะตัดด้วย …
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: kForumTextDark,
-                  fontSize: 16,
+                  fontSize: 14,
                   height: 1.3,
                 ),
               ),

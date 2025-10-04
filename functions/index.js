@@ -44,7 +44,7 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
     }
     const userId = userSnap.docs[0].data().user_id;
 
-    // ✅ enrollment ทั้งหมดของ user
+    // ✅ enrollment ของ user
     const enrollSnap = await admin.firestore()
       .collection("enrollment")
       .where("user_id", "==", userId)
@@ -56,15 +56,14 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
         gpaBySemester: {},
         subploScores: {},
         ploScores: {},
-        careerScores: {}
+        careerScores: []
       });
     }
 
     let totalPoints = 0, totalCredits = 0;
     const semPoints = {}, semCredits = {};
-    const rawSubplo = {};   // เก็บคะแนน subplo_id ต่อวิชา
-    const finalSkills = {}; // เก็บคะแนน skill code จริง
-    const ploScores = {}, careerScores = {};
+    const rawSubplo = {}, finalSkills = {};
+    const ploScores = {};
 
     // ✅ loop enrollment
     for (const e of enrollSnap.docs) {
@@ -89,7 +88,6 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
         semPoints[semester] = (semPoints[semester] || 0) + (point * credits);
         semCredits[semester] = (semCredits[semester] || 0) + credits;
 
-        // ✅ เก็บคะแนนใน rawSubplo
         if (subploId) {
           if (!rawSubplo[subploId]) rawSubplo[subploId] = { points: 0, credits: 0 };
           rawSubplo[subploId].points += point * credits;
@@ -107,7 +105,7 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       gpaBySemester[sem] = crd > 0 ? pts / crd : 0;
     });
 
-    // ✅ ดึง subplo description มา map
+    // ✅ subplo description
     const subploDocs = await admin.firestore().collection("subplo").get();
     const subploMap = {};
     subploDocs.forEach(doc => {
@@ -115,7 +113,7 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       subploMap[d.subplo_id] = d.subplo_description || "";
     });
 
-    // ✅ ดึง plo description มา map
+    // ✅ plo description
     const ploDocs = await admin.firestore().collection("plo").get();
     const ploMap = {};
     ploDocs.forEach(doc => {
@@ -123,11 +121,10 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       ploMap[d.plo_id.toUpperCase()] = d.plo_description || "";
     });
 
-    // ✅ คำนวณคะแนนแยกเป็น skill เดี่ยว
+    // ✅ คำนวณ subplo
     Object.keys(rawSubplo).forEach(key => {
       const { points, credits } = rawSubplo[key];
       const avg = credits > 0 ? points / credits : 0;
-
       const skills = key.split(",");
       skills.forEach(skill => {
         skill = skill.trim();
@@ -138,7 +135,6 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       });
     });
 
-    // ✅ Normalize skills → subploScores (มี description)
     const subploScores = {};
     Object.keys(finalSkills).forEach(skill => {
       const { total, count } = finalSkills[skill];
@@ -160,7 +156,6 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       }
     });
 
-    // ✅ Normalize PLO (มี description)
     Object.keys(ploScores).forEach(p => {
       const { total, count } = ploScores[p];
       const avg = count > 0 ? total / count : 0;
@@ -170,12 +165,42 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       };
     });
 
+    // ✅ careers mapping
+    const careerDocs = await admin.firestore().collection("career").get();
+    const careerScores = [];
+
+    careerDocs.forEach(doc => {
+      const d = doc.data();
+      const careerId = d.career_id; // ใช้ field career_id ที่อยู่ใน DB
+      const relatedPLO = Array.isArray(d.plo_id) ? d.plo_id : [d.plo_id];
+      let sum = 0, count = 0;
+
+      relatedPLO.forEach(pid => {
+        const ploKey = pid.toUpperCase();
+        if (ploScores[ploKey]) {
+          sum += ploScores[ploKey].score;
+          count++;
+        }
+      });
+
+      const avg = count > 0 ? sum / count : 0;
+      const percent = ((avg / 4.0) * 100).toFixed(0);
+
+      careerScores.push({
+        career_id: careerId,
+        thname: d.career_thname || "",
+        enname: d.career_enname || "",
+        score: avg,
+        percent: parseInt(percent)
+      });
+    });
+
     return res.json({
       gpa,
       gpaBySemester,
-      subploScores,  // ✅ {"1A": {score:3.25, description:"..."}, ...}
-      ploScores,     // ✅ {"PLO1": {score:3.6, description:"..."}, ...}
-      careerScores,
+      subploScores,
+      ploScores,
+      careerScores // ✅ array [{career_id, thname, enname, score, percent}]
     });
 
   } catch (err) {

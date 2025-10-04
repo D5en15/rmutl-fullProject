@@ -1,8 +1,7 @@
-// lib/ui/forum/post_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ เพิ่ม
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PostDetailPage extends StatefulWidget {
   const PostDetailPage({super.key, required this.postId});
@@ -32,27 +31,27 @@ class _PostDetailPageState extends State<PostDetailPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // ✅ ดึงข้อมูลผู้ใช้จริงจาก Firestore
+    // ✅ ดึงข้อมูลผู้ใช้
     final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
+        .collection('user')
+        .where('user_email', isEqualTo: user.email)
+        .limit(1)
         .get();
 
-    final userData = userDoc.data();
+    if (userDoc.docs.isEmpty) return;
+    final userData = userDoc.docs.first.data();
 
+    // ✅ เพิ่ม comment ลง subcollection ของ post
     await FirebaseFirestore.instance
-        .collection('posts')
+        .collection('post')
         .doc(widget.postId)
         .collection('comments')
         .add({
-      'text': text,
-      'authorId': user.uid,
-      'authorName': userData?['displayName'] ??
-          userData?['username'] ??
-          user.email ??
-          'Unknown',
-      'authorAvatar': userData?['avatar'],
-      'createdAt': FieldValue.serverTimestamp(),
+      'user_id': userData['user_id'],
+      'comment_content': text,
+      'comment_time': FieldValue.serverTimestamp(),
+      'authorName': userData['user_fullname'] ?? 'Unknown',
+      'authorAvatar': userData['user_img'],
     });
 
     _commentCtrl.clear();
@@ -74,16 +73,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
             onPressed: () => context.pop()),
         title: const Text('Post'),
         centerTitle: false,
-        actions: [
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
       ),
       body: Column(
         children: [
           Expanded(
             child: StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('posts')
+                  .collection('post')
                   .doc(widget.postId)
                   .snapshots(),
               builder: (context, snap) {
@@ -95,11 +91,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   return const Center(child: Text("Post not found"));
                 }
 
-                final author = data['authorName'] ?? 'Unknown';
-                final content = data['content'] ?? '';
+                final title = data['post_title'] ?? '';
+                final content = data['post_content'] ?? '';
                 final createdAt =
-                    (data['createdAt'] as Timestamp?)?.toDate();
-                final avatar = data['authorAvatar']; // ✅ ดึงจาก Firestore
+                    (data['post_time'] as Timestamp?)?.toDate();
+                final author = data['authorName'] ?? 'Unknown';
+                final avatar = data['authorAvatar'];
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
@@ -110,7 +107,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           radius: 18,
                           backgroundColor: const Color(0xFFDDE3F8),
                           backgroundImage: avatar != null
-                              ? AssetImage('assets/avatars/$avatar')
+                              ? NetworkImage(avatar)
                               : null,
                           child: avatar == null
                               ? const Icon(Icons.person,
@@ -136,6 +133,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       ],
                     ),
                     const SizedBox(height: 10),
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 18)),
+                    const SizedBox(height: 6),
                     Text(content,
                         style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 16)),
@@ -144,16 +145,20 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
 
-                    // ✅ Comments list
+                    // ✅ Comments list จาก subcollection
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection('posts')
+                          .collection('post')
                           .doc(widget.postId)
                           .collection('comments')
-                          .orderBy('createdAt', descending: true)
+                          .orderBy('comment_time', descending: true)
                           .snapshots(),
                       builder: (context, snapC) {
-                        if (!snapC.hasData || snapC.data!.docs.isEmpty) {
+                        if (!snapC.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapC.data!.docs.isEmpty) {
                           return const Text("ยังไม่มีความคิดเห็น");
                         }
                         return Column(
@@ -162,8 +167,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             return _CommentTile(
                               name: c['authorName'] ?? 'Unknown',
                               avatar: c['authorAvatar'],
-                              text: c['text'] ?? '',
-                              time: (c['createdAt'] as Timestamp?)?.toDate() ??
+                              text: c['comment_content'] ?? '',
+                              time: (c['comment_time'] as Timestamp?)?.toDate() ??
                                   DateTime.now(),
                             );
                           }).toList(),
@@ -244,8 +249,7 @@ class _CommentTile extends StatelessWidget {
           CircleAvatar(
             radius: 16,
             backgroundColor: const Color(0xFFD9E3FF),
-            backgroundImage:
-                avatar != null ? AssetImage('assets/avatars/$avatar') : null,
+            backgroundImage: avatar != null ? NetworkImage(avatar!) : null,
             child: avatar == null
                 ? const Icon(Icons.person, size: 16, color: Colors.white)
                 : null,

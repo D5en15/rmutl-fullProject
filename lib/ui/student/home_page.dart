@@ -76,20 +76,18 @@ class StudentHomePage extends StatelessWidget {
                     Map<String, dynamic>.from(data['subploScores'] ?? {});
                 final ploScores =
                     Map<String, dynamic>.from(data['ploScores'] ?? {});
+                final careerScores =
+                    List<Map<String, dynamic>>.from(data['careerScores'] ?? []);
                 final fullname = data['user_fullname'] ?? "Student";
 
-                // ✅ Debug
-                debugPrint("📊 PLO Scores: $ploScores");
-                debugPrint("📊 SubPLO Scores: $subploScores");
-
-                // ✅ หา Top PLO (ยกเว้น PLO1)
+                // ✅ หา Top PLO
                 String topPlo = "Unknown";
                 String topPloDesc = "No description available";
                 double topPloValue = -1;
 
                 ploScores.forEach((key, val) {
                   final double score = (val["score"] as num).toDouble();
-                  if (key.toUpperCase() == "PLO1") return; // ❌ ข้าม PLO1
+                  if (key.toUpperCase() == "PLO1") return;
                   if (score > topPloValue) {
                     topPloValue = score;
                     topPlo = key;
@@ -128,6 +126,8 @@ class StudentHomePage extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _SkillStrengths(skills: skills),
+                      const SizedBox(height: 24),
+                      _RecommendedCareers(careers: careerScores), // 👈 เพิ่มตรงนี้
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -344,7 +344,7 @@ class _LineChartPainter extends CustomPainter {
     final chartWidth = size.width - paddingLeft;
     final chartHeight = size.height - paddingBottom;
 
-    // แกน
+    // แกน X Y
     canvas.drawLine(
       Offset(paddingLeft, chartHeight),
       Offset(size.width, chartHeight),
@@ -369,7 +369,7 @@ class _LineChartPainter extends CustomPainter {
       )..layout();
       tp.paint(canvas, Offset(0, y - 6));
 
-      // grid
+      // grid line
       canvas.drawLine(
         Offset(paddingLeft, y),
         Offset(size.width, y),
@@ -393,7 +393,7 @@ class _LineChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(x - tp.width / 2, chartHeight + 4));
     }
 
-    // plot
+    // plot line + จุด
     final path = Path();
     for (int i = 0; i < data.length; i++) {
       final x = paddingLeft + i * dx;
@@ -473,7 +473,7 @@ class _SkillStrengths extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Skill strengths',
+                'Skill strengths (Top 5 SubPLO)',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
               const SizedBox(height: 10),
@@ -522,6 +522,72 @@ class _SkillBar extends StatelessWidget {
             valueColor:
                 const AlwaysStoppedAnimation(StudentHomePage._primary),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// -----------------------------------------------------------------
+/// 💼 Recommended careers (จาก Cloud Function)
+/// -----------------------------------------------------------------
+class _RecommendedCareers extends StatelessWidget {
+  const _RecommendedCareers({required this.careers});
+  final List<Map<String, dynamic>> careers;
+
+  @override
+  Widget build(BuildContext context) {
+    if (careers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text("No recommended careers available",
+            style: TextStyle(color: Colors.black54)),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Recommended careers',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          const SizedBox(height: 12),
+          ...careers.map((career) {
+            final name = career["enname"] ?? "Unknown Career";
+            final thname = career["thname"] ?? "";
+            final percent = (career["percent"] as num?)?.toInt() ?? 0;
+
+            return Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.work_outline,
+                    color: StudentHomePage._primary),
+                title: Text(name,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(thname),
+                trailing: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    "$percent%",
+                    style: const TextStyle(
+                        color: StudentHomePage._primary,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
