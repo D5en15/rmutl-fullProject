@@ -78,44 +78,42 @@ class StudentHomePage extends StatelessWidget {
                     Map<String, dynamic>.from(data['ploScores'] ?? {});
                 final fullname = data['user_fullname'] ?? "Student";
 
-                // ✅ Debug: Print ค่า PLO ทั้งหมด
-                debugPrint("📊 Raw PLO Scores: $ploScores");
+                // ✅ Debug
+                debugPrint("📊 PLO Scores: $ploScores");
+                debugPrint("📊 SubPLO Scores: $subploScores");
 
-                // ✅ หา Top PLO
+                // ✅ หา Top PLO (ยกเว้น PLO1)
                 String topPlo = "Unknown";
                 String topPloDesc = "No description available";
                 double topPloValue = -1;
 
                 ploScores.forEach((key, val) {
-                  final double score;
-                  String desc;
-
-                  if (val is Map) {
-                    score = (val['score'] as num?)?.toDouble() ?? 0;
-                    desc = val['description'] as String? ?? key;
-                  } else {
-                    score = (val as num).toDouble();
-                    desc = key; // fallback
-                  }
-
-                  // ✅ print รายตัว
-                  debugPrint("➡️ PLO $key | score=$score | desc=$desc");
-
+                  final double score = (val["score"] as num).toDouble();
+                  if (key.toUpperCase() == "PLO1") return; // ❌ ข้าม PLO1
                   if (score > topPloValue) {
                     topPloValue = score;
                     topPlo = key;
-                    topPloDesc = desc;
+                    final desc = val["description"] ?? key;
+                    topPloDesc = "$desc (${score.toStringAsFixed(2)}/4.00)";
                   }
                 });
 
-                // ✅ SubPLO → skills
+                // ✅ SubPLO → skills (Top 5)
                 List<Map<String, dynamic>> skills = [];
                 subploScores.forEach((key, val) {
-                  final double score =
-                      val is Map ? (val['score'] as num?)?.toDouble() ?? 0 : (val as num).toDouble();
-                  final percent = ((score / 4.0) * 100).clamp(0, 100).toInt();
-                  skills.add({"title": key, "percent": percent});
+                  final double score = (val["score"] as num).toDouble();
+                  final desc = val["description"] ?? key;
+                  final percent =
+                      ((score / 4.0) * 100).clamp(0, 100).toInt();
+                  skills.add({
+                    "title": "$key: $desc",
+                    "percent": percent,
+                  });
                 });
+
+                skills.sort((a, b) =>
+                    (b['percent'] as int).compareTo(a['percent'] as int));
+                skills = skills.take(5).toList();
 
                 return SingleChildScrollView(
                   child: Column(
@@ -346,7 +344,7 @@ class _LineChartPainter extends CustomPainter {
     final chartWidth = size.width - paddingLeft;
     final chartHeight = size.height - paddingBottom;
 
-    // วาดแกน X, Y
+    // แกน
     canvas.drawLine(
       Offset(paddingLeft, chartHeight),
       Offset(size.width, chartHeight),
@@ -358,7 +356,7 @@ class _LineChartPainter extends CustomPainter {
       axis,
     );
 
-    // Y labels 0–4
+    // Y labels
     const maxGrade = 4;
     for (int g = 0; g <= maxGrade; g++) {
       final y = chartHeight - (g / maxGrade) * chartHeight;
@@ -395,7 +393,7 @@ class _LineChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(x - tp.width / 2, chartHeight + 4));
     }
 
-    // เส้นกราฟ
+    // plot
     final path = Path();
     for (int i = 0; i < data.length; i++) {
       final x = paddingLeft + i * dx;
@@ -406,7 +404,6 @@ class _LineChartPainter extends CustomPainter {
       } else {
         path.lineTo(x, y);
       }
-
       canvas.drawCircle(Offset(x, y), 3, dot);
     }
     canvas.drawPath(path, line);
@@ -417,7 +414,7 @@ class _LineChartPainter extends CustomPainter {
 }
 
 /// -----------------------------------------------------------------
-/// 🔥 Top strength chip (แสดง PLO ที่ได้คะแนนสูงสุด)
+/// 🔥 Top strength chip
 /// -----------------------------------------------------------------
 class _TopStrengthChip extends StatelessWidget {
   const _TopStrengthChip({
@@ -444,20 +441,9 @@ class _TopStrengthChip extends StatelessWidget {
                 color: StudentHomePage._primary),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Top PLO: $topPlo',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(description,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w400,
-                          color: Colors.black54,
-                          fontSize: 12)),
-                ],
-              ),
+              child: Text(description,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 14)),
             ),
           ],
         ),
@@ -467,7 +453,7 @@ class _TopStrengthChip extends StatelessWidget {
 }
 
 /// -----------------------------------------------------------------
-/// 🧠 Skill strengths
+/// 🧠 Skill strengths (Top 5 SubPLO)
 /// -----------------------------------------------------------------
 class _SkillStrengths extends StatelessWidget {
   const _SkillStrengths({required this.skills});
@@ -533,7 +519,8 @@ class _SkillBar extends StatelessWidget {
             value: value,
             minHeight: 8,
             backgroundColor: const Color(0xFFE8EAFF),
-            valueColor: const AlwaysStoppedAnimation(StudentHomePage._primary),
+            valueColor:
+                const AlwaysStoppedAnimation(StudentHomePage._primary),
           ),
         ],
       ),
