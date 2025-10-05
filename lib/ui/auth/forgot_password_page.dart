@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ เพิ่มบรรทัดนี้
+import '../../services/forgot_password_service.dart';
+import '../../widgets/custom_input.dart';
+import '../../widgets/custom_button.dart';
+import '../../widgets/app_toast.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -11,46 +14,27 @@ class ForgotPasswordPage extends StatefulWidget {
 }
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
+  final _service = ForgotPasswordService();
   final _emailCtrl = TextEditingController();
   bool _loading = false;
 
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   Future<void> _resetPassword() async {
-    final email = _emailCtrl.text.trim().toLowerCase();
+    final email = _emailCtrl.text.trim();
+
     if (email.isEmpty) {
-      _toast("กรอกอีเมลก่อน");
+      AppToast.info(context, "Please enter your email first.");
       return;
     }
 
     setState(() => _loading = true);
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('user')
-          .where('user_email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (snap.docs.isEmpty) {
-        _toast("❌ ไม่พบบัญชีนี้ในระบบ");
-        setState(() => _loading = false);
-        return;
-      }
-
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _toast("📩 ลิงก์รีเซ็ตรหัสผ่านถูกส่งไปที่ $email แล้ว");
-
-      if (mounted) context.go("/login");
+      await _service.sendResetLink(email);
+      AppToast.success(context, "Password reset link has been sent to $email.");
+      if (mounted) context.go('/login');
     } on FirebaseAuthException catch (e) {
-      if (e.code == "user-not-found") {
-        _toast("❌ ไม่พบบัญชีนี้ในระบบ");
-      } else {
-        _toast("Auth Error: ${e.message}");
-      }
+      AppToast.error(context, e.message ?? "Failed to send reset link.");
     } catch (e) {
-      _toast("Error: $e");
+      AppToast.error(context, e.toString().replaceAll("Exception: ", ""));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -60,17 +44,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   void dispose() {
     _emailCtrl.dispose();
     super.dispose();
-  }
-
-  InputDecoration _dec() {
-    return InputDecoration(
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: Color(0xFF3D5CFF)),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    );
   }
 
   @override
@@ -104,48 +77,32 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 24),
-
-            // 👉 Email Field แบบเดียวกับหน้า Login
-            const Text(
-              "Email",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 6),
-            TextField(
+            CustomInput(
               controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: _dec(),
+              label: "Email",
             ),
-
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loading ? null : _resetPassword,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                backgroundColor: const Color(0xFF3D5CFF),
-              ),
-              child: _loading
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text(
-                      "Reset Password",
-                      style: TextStyle(color: Colors.white),
-                    ),
+            CustomButton(
+              text: "Reset Password",
+              loading: _loading,
+              onPressed: _resetPassword,
             ),
-            const SizedBox(height: 16),
-
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  "Remember your password?  ",
-                  style: TextStyle(color: Colors.black54),
-                ),
+                const Text("Remember your password? "),
                 TextButton(
                   onPressed: () => context.go('/login'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF3D5CFF),
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: const Text(
-                    "Log in",
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    'Log in',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],

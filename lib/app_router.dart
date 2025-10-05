@@ -68,6 +68,7 @@ import 'ui/forum/post_detail_page.dart';
 import 'ui/forum/create_post_page.dart';
 import 'ui/forum/edit_post_page.dart';
 
+
 class AppRouter {
   static final _rootKey = GlobalKey<NavigatorState>();
   static final _studentShellKey =

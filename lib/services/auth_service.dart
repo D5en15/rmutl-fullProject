@@ -1,32 +1,75 @@
-import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { student, teacher, admin }
+class AuthService {
+  final _auth = FirebaseAuth.instance;
+  final _db = FirebaseFirestore.instance;
 
-class AuthService extends ChangeNotifier {
-  static final AuthService _instance = AuthService._internal();
-  factory AuthService() => _instance;
-  AuthService._internal();
+  Future<Map<String, dynamic>> login(String input, String password) async {
+    try {
+      // 🟦 Check if input is email or username
+      String email = input;
+      if (!input.contains('@')) {
+        final snap = await _db
+            .collection('user')
+            .where('user_name', isEqualTo: input)
+            .limit(1)
+            .get();
+        if (snap.docs.isEmpty) throw AuthException('User account not found.');
+        email = snap.docs.first['user_email'];
+      }
 
-  String? _email;
-  UserRole? _role;
+      // 🟩 Firebase Auth login
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-  String? get email => _email;
-  UserRole? get role => _role;
+      final user = cred.user;
+      if (user == null) throw AuthException('Unable to sign in.');
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-    required UserRole role,
-  }) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _email = email;
-    _role = role;
-    notifyListeners();
+      // 🟨 Get user role from Firestore
+      final snap = await _db
+          .collection('user')
+          .where('user_email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isEmpty) throw AuthException('User not found in database.');
+
+      final role = snap.docs.first['user_role'] ?? 'student';
+      return {'email': email, 'role': role};
+    } on FirebaseAuthException catch (e) {
+      // 🟥 Handle common FirebaseAuth errors in user-friendly English
+      String msg;
+      switch (e.code) {
+        case 'user-not-found':
+          msg = 'No account found. Please check your email or username.';
+          break;
+        case 'wrong-password':
+          msg = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-email':
+          msg = 'Invalid email format.';
+          break;
+        case 'too-many-requests':
+          msg = 'Too many attempts. Please try again later.';
+          break;
+        default:
+          msg = 'Login failed. Please try again.';
+      }
+      throw AuthException(msg);
+    } catch (_) {
+      throw AuthException('Incorrect information. Please try again.');
+    }
   }
+}
 
-  void signOut() {
-    _email = null;
-    _role = null;
-    notifyListeners();
-  }
+/// ✅ Custom Auth Exception for controlled error messages
+class AuthException implements Exception {
+  final String message;
+  AuthException(this.message);
+
+  @override
+  String toString() => message;
 }

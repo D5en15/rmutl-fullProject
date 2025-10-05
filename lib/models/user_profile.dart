@@ -10,3 +10,4 @@ class UserProfile {
     required this.role,
   });
 }
+ 
