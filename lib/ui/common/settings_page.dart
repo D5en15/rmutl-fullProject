@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/settings_model.dart';
+import '../../models/edit_profile_initial.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/setting_title.dart';

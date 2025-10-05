@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/edit_profile_model.dart';
+import '../../models/edit_profile_initial.dart';
 import '../../services/edit_profile_service.dart';
 import '../../widgets/custom_input.dart';
 import '../../widgets/custom_button.dart';
@@ -10,7 +10,7 @@ import '../../widgets/app_toast.dart';
 
 class EditProfilePage extends StatefulWidget {
   final String role;
-  final EditProfileModel? initial;
+  final EditProfileInitial? initial;
 
   const EditProfilePage({
     super.key,
