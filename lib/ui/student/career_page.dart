@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../common/page_template.dart';
-import '../../services/career_service.dart';
 import '../../widgets/career_card.dart';
 import '../../models/career_rule.dart';
 
@@ -17,7 +16,6 @@ class _CareerPageState extends State<CareerPage> {
   @override
   void initState() {
     super.initState();
-    future = CareerService().fetchRules();
   }
 
   @override

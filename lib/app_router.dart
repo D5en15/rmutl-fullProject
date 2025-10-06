@@ -16,7 +16,6 @@ import 'ui/common/chat_page.dart';
 
 // ---------- shared pages -----
 import 'ui/common/edit_profile_page.dart';
-
 import 'models/edit_profile_initial.dart';
 
 // ---------- STUDENT ----------
@@ -63,13 +62,14 @@ import 'ui/admin/career_edit_page.dart';
 import 'ui/admin/subject_subplo_mapping_page.dart';
 import 'ui/admin/plo_subplo_mapping_page.dart';
 import 'ui/admin/career_mapping_page.dart';
+// ✅ Classrooms (new)
+import 'ui/admin/classrooms_manage_page.dart';
 
 // ---------- FORUM (shared) ----------
 import 'ui/forum/forum_list_page.dart';
 import 'ui/forum/post_detail_page.dart';
 import 'ui/forum/create_post_page.dart';
 import 'ui/forum/edit_post_page.dart';
-
 
 class AppRouter {
   static final _rootKey = GlobalKey<NavigatorState>();
@@ -96,7 +96,9 @@ class AppRouter {
       // ---------- COMMON ----------
       GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
-      GoRoute(path: '/notifications', builder: (_, __) => const NotificationPage()),
+      GoRoute(
+          path: '/notifications',
+          builder: (_, __) => const NotificationPage()),
       GoRoute(
         path: '/profile/edit',
         builder: (_, s) => EditProfilePage(
@@ -137,7 +139,7 @@ class AppRouter {
               GoRoute(
                 path: ':id/edit',
                 builder: (_, s) =>
-                    EditSubjectPage(enrollmentId: s.pathParameters['id']!), // ✅ fixed
+                    EditSubjectPage(enrollmentId: s.pathParameters['id']!),
               ),
             ],
           ),
@@ -287,6 +289,12 @@ class AppRouter {
                 path: 'config/careers/:id/edit',
                 builder: (_, s) =>
                     CareerEditPage(careerId: s.pathParameters['id']!),
+              ),
+
+              // ✅ Classrooms management (NEW)
+              GoRoute(
+                path: 'config/classrooms',
+                builder: (_, __) => const ClassroomsManagePage(),
               ),
 
               // ✅ Mapping pages

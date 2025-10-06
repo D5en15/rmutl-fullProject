@@ -31,9 +31,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => loading = true);
     try {
       final result = await _authService.login(input, pass);
-      final role = result['role'];
+      // ✅ แปลง role เป็นตัวพิมพ์เล็กก่อนตรวจสอบ
+      final role = (result['role'] ?? '').toString().toLowerCase();
 
       AppToast.success(context, 'Login successful.');
+
       switch (role) {
         case 'admin':
           context.go('/admin');
@@ -95,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
                 onPressed: () => setState(() => obscure = !obscure),
               ),
             ),
-            // ✅ ปุ่ม "Forgot password?" กลับมาอยู่ตรงนี้
+            // ✅ ปุ่ม "Forgot password?"
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(

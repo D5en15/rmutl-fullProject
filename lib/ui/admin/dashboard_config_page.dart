@@ -122,6 +122,7 @@ class DashboardConfigPage extends StatelessWidget {
             _countDocs('plo'),
             _countDocs('career'),
             _countDocs('career_mapping'),
+            _countDocs('classroom'), // ✅ เพิ่ม collection ห้องเรียน
             _countSubjectMappings(),
             _countPloMappings(),
           ]),
@@ -139,8 +140,9 @@ class DashboardConfigPage extends StatelessWidget {
             final ploCount = results[2] as int;
             final careersCount = results[3] as int;
             final mappingCount = results[4] as int;
-            final subjectMapping = results[5] as Map<String, int>;
-            final ploMapping = results[6] as Map<String, int>;
+            final classroomCount = results[5] as int; // ✅ ห้องเรียนทั้งหมด
+            final subjectMapping = results[6] as Map<String, int>;
+            final ploMapping = results[7] as Map<String, int>;
 
             final subjectMapped = subjectMapping["mapped"]!;
             final subjectTotal = subjectMapping["total"]!;
@@ -152,8 +154,8 @@ class DashboardConfigPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text("📘 Academic",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 18)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 6),
                   _tile(
                     icon: Icons.menu_book_outlined,
@@ -173,8 +175,6 @@ class DashboardConfigPage extends StatelessWidget {
                     subtitle: "$ploCount main skills",
                     onManage: () => context.go('/admin/config/plo'),
                   ),
-
-                  // ✅ Mapping menu (ไม่แสดงจำนวนแล้ว)
                   _tile(
                     icon: Icons.school_outlined,
                     title: 'Subject ↔ SubPLO',
@@ -189,11 +189,23 @@ class DashboardConfigPage extends StatelessWidget {
                     onManage: () =>
                         context.go('/admin/config/plo-subplo-mapping'),
                   ),
-                  const SizedBox(height: 16),
 
+                  const SizedBox(height: 16),
+                  const Text("🏫 Classrooms",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 6),
+                  _tile(
+                    icon: Icons.meeting_room_outlined,
+                    title: 'Classrooms',
+                    subtitle: "$classroomCount rooms",
+                    onManage: () => context.go('/admin/config/classrooms'),
+                  ),
+
+                  const SizedBox(height: 16),
                   const Text("👨‍💻 Careers",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 18)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   const SizedBox(height: 6),
                   _tile(
                     icon: Icons.work_outline,

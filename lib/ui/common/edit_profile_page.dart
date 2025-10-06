@@ -1,5 +1,7 @@
+// lib/ui/common/edit_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/edit_profile_initial.dart';
 import '../../services/edit_profile_service.dart';
 import '../../widgets/custom_input.dart';
@@ -33,14 +35,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   String? _classValue;
   String? _avatarUrl;
   bool _loading = false;
+  bool _loadingClasses = true;
   String? _docId;
 
-  final List<String> _classes = ['SE-3/1', 'SE-3/2', 'SE-4/1'];
+  List<String> _classes = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadClassrooms(); // ✅ โหลดห้องเรียนจาก Firestore
   }
 
   Future<void> _loadUserData() async {
@@ -62,6 +66,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
       AppToast.error(context, 'Failed to load profile: $e');
     } finally {
       setState(() => _loading = false);
+    }
+  }
+
+  /// ✅ โหลดรายชื่อห้องเรียนจาก Firestore (ดึงเฉพาะชื่อห้อง)
+  Future<void> _loadClassrooms() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('classroom')
+          .orderBy('room_name')
+          .get();
+      final rooms = snap.docs
+          .map((d) => (d.data()['room_name'] ?? '').toString())
+          .where((name) => name.isNotEmpty)
+          .toList();
+
+      setState(() {
+        _classes = rooms;
+        _loadingClasses = false;
+      });
+    } catch (e) {
+      debugPrint("⚠️ Error loading classrooms: $e");
+      setState(() => _loadingClasses = false);
     }
   }
 
@@ -188,32 +214,58 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           ),
                           const SizedBox(height: 8),
 
-                          // 🔹 กล่อง Dropdown ใช้สไตล์เดียวกับ CustomInput
+                          // 🔹 Dropdown ดึงจาก Firestore
                           Container(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
                               border: Border.all(
-                                color: Colors.black54, // ✅ สีเข้มเหมือนช่องอื่น
+                                color: Colors.black54,
                                 width: 1.3,
                               ),
                               borderRadius:
                                   const BorderRadius.all(Radius.circular(12)),
                             ),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _classValue,
-                                isExpanded: true,
-                                items: _classes
-                                    .map((c) => DropdownMenuItem(
-                                          value: c,
-                                          child: Text(c),
-                                        ))
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setState(() => _classValue = v),
-                                hint: const Text("Select Class"),
-                              ),
+                              child: _loadingClasses
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2)),
+                                          SizedBox(width: 10),
+                                          Text("Loading classrooms..."),
+                                        ],
+                                      ),
+                                    )
+                                  : Builder(
+                                      builder: (_) {
+                                        // ✅ ป้องกัน error: ถ้าค่าปัจจุบันไม่มีใน list ให้รีเซ็ต
+                                        if (_classValue != null &&
+                                            !_classes.contains(_classValue)) {
+                                          _classValue = null;
+                                        }
+
+                                        return DropdownButton<String>(
+                                          value: _classValue,
+                                          isExpanded: true,
+                                          items: _classes
+                                              .map((c) => DropdownMenuItem(
+                                                    value: c,
+                                                    child: Text(c),
+                                                  ))
+                                              .toList(),
+                                          onChanged: (v) =>
+                                              setState(() => _classValue = v),
+                                          hint:
+                                              const Text("Select Classroom"),
+                                        );
+                                      },
+                                    ),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -233,7 +285,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
           ),
 
-          // 🔹 ปุ่ม Back (แยก SafeArea ชั้นบนสุด — ไม่ถูก Stack บัง)
+          // 🔹 ปุ่ม Back (ด้านบนสุด)
           Positioned(
             top: 8,
             left: 8,
