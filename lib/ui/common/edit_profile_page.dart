@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/edit_profile_model.dart';
 import '../../models/edit_profile_initial.dart';
 import '../../services/edit_profile_service.dart';
 import '../../widgets/custom_input.dart';
@@ -66,9 +65,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  Future<void> _pickAvatar() async {
+  Future<void> _pickAvatar(BuildContext context) async {
     try {
-      final url = await _service.pickAndUploadAvatar();
+      final url = await _service.pickAndUploadAvatar(context);
       if (url == null) return;
       setState(() => _avatarUrl = url);
       AppToast.success(context, "Profile picture updated successfully!");
@@ -104,84 +103,154 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      // ✅ Header
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => context.pop(),
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                          ),
-                          const Text(
-                            "Edit Profile",
-                            style: TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
+      body: Stack(
+        children: [
+          // 🔹 พื้นหลังสีน้ำเงิน
+          Container(
+            height: 130,
+            width: double.infinity,
+            color: const Color(0xFF1E63E9),
+          ),
 
-                      // ✅ Avatar Widget — รองรับได้ทั้ง mobile/web
+          // 🔹 เนื้อหาหลักทั้งหมด
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  const SizedBox(height: 70),
+
+                  // ✅ รูปโปรไฟล์ + ปุ่มแก้ไข
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
                       GestureDetector(
-                        onTap: _pickAvatar,
+                        onTap: () => _pickAvatar(context),
                         child: AvatarWidget(
                           imageUrl: _avatarUrl,
-                          radius: 45,
+                          radius: 55,
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-
-                      CustomInput(controller: _username, label: "Username"),
-                      const SizedBox(height: 16),
-                      CustomInput(controller: _fullname, label: "Full Name"),
-                      const SizedBox(height: 16),
-                      CustomInput(
-                        controller: _email,
-                        label: "Email",
-                        readOnly: true, // ✅ ใช้ชื่อจริงใน custom_input
-                      ),
-                      const SizedBox(height: 16),
-
-                      if (isStudent) ...[
-                        CustomInput(
-                            controller: _studentId, label: "Student ID"),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(
-                          value: _classValue,
-                          items: _classes
-                              .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
-                              .toList(),
-                          decoration: const InputDecoration(
-                            labelText: "Class",
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(12)),
-                            ),
+                      Positioned(
+                        bottom: 2,
+                        right: 2,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
                           ),
-                          onChanged: (v) => setState(() => _classValue = v),
+                          child: IconButton(
+                            icon: const Icon(Icons.edit,
+                                size: 20, color: Colors.blueAccent),
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(),
+                            onPressed: () => _pickAvatar(context),
+                          ),
                         ),
-                        const SizedBox(height: 24),
-                      ],
-
-                      CustomButton(
-                        text: "Save Changes",
-                        loading: _loading,
-                        onPressed: _saveProfile,
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 24),
+
+                  // 🔹 ฟอร์มโปรไฟล์
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        CustomInput(controller: _username, label: "Username"),
+                        const SizedBox(height: 16),
+                        CustomInput(controller: _fullname, label: "Full Name"),
+                        const SizedBox(height: 16),
+                        CustomInput(
+                          controller: _email,
+                          label: "Email",
+                          readOnly: true,
+                        ),
+                        const SizedBox(height: 16),
+
+                        if (isStudent) ...[
+                          CustomInput(
+                              controller: _studentId, label: "Student ID"),
+                          const SizedBox(height: 16),
+
+                          // 🔹 Label Class ด้านนอก
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "Class",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // 🔹 กล่อง Dropdown ใช้สไตล์เดียวกับ CustomInput
+                          Container(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Colors.black54, // ✅ สีเข้มเหมือนช่องอื่น
+                                width: 1.3,
+                              ),
+                              borderRadius:
+                                  const BorderRadius.all(Radius.circular(12)),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _classValue,
+                                isExpanded: true,
+                                items: _classes
+                                    .map((c) => DropdownMenuItem(
+                                          value: c,
+                                          child: Text(c),
+                                        ))
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setState(() => _classValue = v),
+                                hint: const Text("Select Class"),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+
+                        CustomButton(
+                          text: "Save Changes",
+                          loading: _loading,
+                          onPressed: _saveProfile,
+                        ),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 🔹 ปุ่ม Back (แยก SafeArea ชั้นบนสุด — ไม่ถูก Stack บัง)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                  ),
+                  onPressed: () => context.pop(),
                 ),
               ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class PostDetailPage extends StatefulWidget {
-  const PostDetailPage({super.key, required this.postId});
   final String postId;
+  const PostDetailPage({super.key, required this.postId});
 
   @override
   State<PostDetailPage> createState() => _PostDetailPageState();
@@ -13,7 +13,6 @@ class PostDetailPage extends StatefulWidget {
 
 class _PostDetailPageState extends State<PostDetailPage> {
   static const _muted = Color(0xFF8B90A0);
-
   final _commentCtrl = TextEditingController();
 
   String _timeAgo(DateTime time) {
@@ -24,6 +23,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return "${diff.inDays}d ago";
   }
 
+  /// ✅ เพิ่มคอมเมนต์
   Future<void> _submitComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
@@ -31,7 +31,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // ✅ ดึงข้อมูลผู้ใช้
     final userDoc = await FirebaseFirestore.instance
         .collection('user')
         .where('user_email', isEqualTo: user.email)
@@ -41,7 +40,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (userDoc.docs.isEmpty) return;
     final userData = userDoc.docs.first.data();
 
-    // ✅ เพิ่ม comment ลง subcollection ของ post
     await FirebaseFirestore.instance
         .collection('post')
         .doc(widget.postId)
@@ -69,10 +67,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            onPressed: () => context.pop()),
-        title: const Text('Post'),
-        centerTitle: false,
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text('Post Detail'),
       ),
       body: Column(
         children: [
@@ -83,35 +81,36 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   .doc(widget.postId)
                   .snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) {
+                if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final data = snap.data!.data() as Map<String, dynamic>?;
-                if (data == null) {
+                if (!snap.hasData || !snap.data!.exists) {
                   return const Center(child: Text("Post not found"));
                 }
 
+                final data = snap.data!.data() as Map<String, dynamic>;
                 final title = data['post_title'] ?? '';
                 final content = data['post_content'] ?? '';
                 final createdAt =
                     (data['post_time'] as Timestamp?)?.toDate();
                 final author = data['authorName'] ?? 'Unknown';
                 final avatar = data['authorAvatar'];
+                final imageUrl = data['post_img'];
 
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 80),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
                   children: [
+                    // 🧑‍💻 Header (author info)
                     Row(
                       children: [
                         CircleAvatar(
-                          radius: 18,
+                          radius: 20,
                           backgroundColor: const Color(0xFFDDE3F8),
-                          backgroundImage: avatar != null
-                              ? NetworkImage(avatar)
-                              : null,
+                          backgroundImage:
+                              avatar != null ? NetworkImage(avatar) : null,
                           child: avatar == null
                               ? const Icon(Icons.person,
-                                  size: 18, color: Colors.white)
+                                  size: 20, color: Colors.white)
                               : null,
                         ),
                         const SizedBox(width: 10),
@@ -121,7 +120,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             children: [
                               Text(author,
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15)),
                               Text(
                                 createdAt != null ? _timeAgo(createdAt) : '',
                                 style: const TextStyle(
@@ -132,20 +132,64 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 14),
+
+                    // 📝 หัวข้อ
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        height: 1.3,
+                      ),
+                    ),
                     const SizedBox(height: 10),
-                    Text(title,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 18)),
-                    const SizedBox(height: 6),
-                    Text(content,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 16)),
-                    const SizedBox(height: 16),
-                    const Text('Comments',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+
+                    // 📄 เนื้อหา (ย้ายมาไว้เหนือรูป)
+                    Text(
+                      content,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 🖼 รูปภาพ (โชว์หลังเนื้อหา)
+                    if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return const Padding(
+                              padding: EdgeInsets.all(30),
+                              child: Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    const Divider(thickness: 1.1),
                     const SizedBox(height: 8),
 
-                    // ✅ Comments list จาก subcollection
+                    const Text(
+                      'Comments',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 💬 Comments list
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('post')
@@ -154,13 +198,16 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           .orderBy('comment_time', descending: true)
                           .snapshots(),
                       builder: (context, snapC) {
-                        if (!snapC.hasData) {
+                        if (snapC.connectionState ==
+                            ConnectionState.waiting) {
                           return const Center(
                               child: CircularProgressIndicator());
                         }
-                        if (snapC.data!.docs.isEmpty) {
-                          return const Text("ยังไม่มีความคิดเห็น");
+                        if (!snapC.hasData || snapC.data!.docs.isEmpty) {
+                          return const Text("ยังไม่มีความคิดเห็น",
+                              style: TextStyle(color: _muted));
                         }
+
                         return Column(
                           children: snapC.data!.docs.map((d) {
                             final c = d.data() as Map<String, dynamic>;
@@ -168,8 +215,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                               name: c['authorName'] ?? 'Unknown',
                               avatar: c['authorAvatar'],
                               text: c['comment_content'] ?? '',
-                              time: (c['comment_time'] as Timestamp?)?.toDate() ??
-                                  DateTime.now(),
+                              time:
+                                  (c['comment_time'] as Timestamp?)?.toDate() ??
+                                      DateTime.now(),
                             );
                           }).toList(),
                         );
@@ -181,7 +229,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
             ),
           ),
 
-          // ✅ Input zone
+          // 💭 Comment input
           SafeArea(
             child: Container(
               padding:
@@ -202,7 +250,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.send, color: Colors.blue),
+                    icon: const Icon(Icons.send, color: Colors.blueAccent),
                     onPressed: _submitComment,
                   )
                 ],
@@ -215,16 +263,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 }
 
+/// ✅ Tile แสดงคอมเมนต์
 class _CommentTile extends StatelessWidget {
   final String name;
   final String? avatar;
   final String text;
   final DateTime time;
-  const _CommentTile(
-      {required this.name,
-      required this.text,
-      required this.time,
-      this.avatar});
+  const _CommentTile({
+    required this.name,
+    required this.text,
+    required this.time,
+    this.avatar,
+  });
 
   String _timeAgo(DateTime time) {
     final diff = DateTime.now().difference(time);
@@ -237,7 +287,7 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F6FA),
@@ -262,7 +312,8 @@ class _CommentTile extends StatelessWidget {
                 Row(
                   children: [
                     Text(name,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
                     const SizedBox(width: 8),
                     Text(_timeAgo(time),
                         style: const TextStyle(
@@ -270,7 +321,10 @@ class _CommentTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(text),
+                Text(
+                  text,
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
               ],
             ),
           ),

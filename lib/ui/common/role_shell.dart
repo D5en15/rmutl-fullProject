@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// Shell ใส่ Bottom Navigation ตามบทบาท
-/// role: 'student' | 'teacher' | 'admin'
 class RoleShell extends StatelessWidget {
   final String role;
   final Widget child;
-  const RoleShell({super.key, required this.role, required this.child});
 
-  // Theme token
+  const RoleShell({
+    super.key,
+    required this.role,
+    required this.child,
+  });
+
   static const _primary = Color(0xFF3D5CFF);
-  static const _muted   = Color(0xFF858597);
-  static const _bgSoft  = Color(0xFFF6F7FF);
+  static const _muted = Color(0xFF858597);
 
   @override
   Widget build(BuildContext context) {
+    // ✅ ใช้ GoRouterState.of(context).uri เพื่ออ่านเส้นทางปัจจุบัน
     final uri = GoRouterState.of(context).uri.toString();
 
-    // เมนูต่อบทบาท — (Admin) เพิ่ม alias ให้ Config รองรับทั้ง /admin/config
-    // และ /admin/career-config รวมถึงทุกเส้นทางย่อยใต้ /admin/config/*
     final List<_NavItem> items = switch (role) {
       'student' => const [
         _NavItem('Home', Icons.home_outlined, '/student'),
-        _NavItem('Subject list', Icons.list_alt_outlined, '/student/subjects'),
+        _NavItem('Subjects', Icons.list_alt_outlined, '/student/subjects'),
         _NavItem('Community', Icons.forum_outlined, '/student/forum'),
         _NavItem('Setting', Icons.settings_outlined, '/student/settings'),
       ],
@@ -33,17 +33,11 @@ class RoleShell extends StatelessWidget {
       ],
       _ => const [
         _NavItem('Home', Icons.home_outlined, '/admin'),
-        _NavItem(
-          'Config',
-          Icons.track_changes_outlined,
-          '/admin/config',
-          // เพิ่ม alias สำคัญสำหรับ resolve index ให้แท็บยังคงเลือกที่ Config
-          aliases: [
-            '/admin/career-config',  // alias เก่า
-            '/admin/config/subjects',
-            '/admin/config/skills',
-          ],
-        ),
+        _NavItem('Config', Icons.track_changes_outlined, '/admin/config', aliases: [
+          '/admin/career-config',
+          '/admin/config/subjects',
+          '/admin/config/skills',
+        ]),
         _NavItem('Community', Icons.forum_outlined, '/admin/forum'),
         _NavItem('Setting', Icons.settings_outlined, '/admin/settings'),
       ],
@@ -74,16 +68,12 @@ class RoleShell extends StatelessWidget {
     );
   }
 
-  /// หาดัชนีเมนูจาก URI ปัจจุบัน (รองรับ aliases และเส้นทางย่อย)
   static int _resolveIndex(String uri, List<_NavItem> items) {
     for (var i = 0; i < items.length; i++) {
       final paths = [items[i].path, ...items[i].aliases];
       for (final p in paths) {
         if (uri == p || uri.startsWith('$p/')) return i;
       }
-      // กรณีพิเศษ: ถ้า path หลักมีลูกย่อยจำนวนมาก เช่น '/admin/config/...'
-      // การเช็ค startsWith ที่ path หลักเพียงตัวเดียวก็เพียงพอแล้ว
-      if (uri.startsWith('${items[i].path}/')) return i;
     }
     return 0;
   }
@@ -93,13 +83,12 @@ class RoleShell extends StatelessWidget {
   }
 }
 
-/// ----------------------------------------------------------------------
-/// 📦 Pill Navigation (student + admin)
-/// ----------------------------------------------------------------------
+/// 📦 Pill Navigation (Student + Admin)
 class _PillNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
+
   const _PillNavBar({
     required this.items,
     required this.currentIndex,
@@ -133,18 +122,18 @@ class _PillNavBar extends StatelessWidget {
 }
 
 class _PillItem extends StatelessWidget {
+  final _NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
   const _PillItem({
     required this.item,
     required this.selected,
     required this.onTap,
   });
 
-  final _NavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
   static const _primary = RoleShell._primary;
-  static const _muted   = RoleShell._muted;
+  static const _muted = RoleShell._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -178,13 +167,12 @@ class _PillItem extends StatelessWidget {
   }
 }
 
-/// ----------------------------------------------------------------------
-/// 📦 Flat Navigation (teacher)
-/// ----------------------------------------------------------------------
+/// 📦 Flat Navigation (Teacher)
 class _FlatNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
+
   const _FlatNavBar({
     required this.items,
     required this.currentIndex,
@@ -212,18 +200,18 @@ class _FlatNavBar extends StatelessWidget {
 }
 
 class _FlatItem extends StatelessWidget {
+  final _NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
   const _FlatItem({
     required this.item,
     required this.selected,
     required this.onTap,
   });
 
-  final _NavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
   static const _primary = RoleShell._primary;
-  static const _muted   = RoleShell._muted;
+  static const _muted = RoleShell._muted;
 
   @override
   Widget build(BuildContext context) {
@@ -253,13 +241,12 @@ class _FlatItem extends StatelessWidget {
   }
 }
 
-/// ----------------------------------------------------------------------
-/// 📦 Item model (รองรับ aliases)
-/// ----------------------------------------------------------------------
+/// 📦 Nav Item Model
 class _NavItem {
   final String label;
   final IconData icon;
   final String path;
   final List<String> aliases;
+
   const _NavItem(this.label, this.icon, this.path, {this.aliases = const []});
 }

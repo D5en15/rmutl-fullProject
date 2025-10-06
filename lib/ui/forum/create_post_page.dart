@@ -1,7 +1,12 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
+
+import '../../services/forum_service.dart';
+import '../../models/forum_model.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -13,11 +18,14 @@ class CreatePostPage extends StatefulWidget {
 class _CreatePostPageState extends State<CreatePostPage> {
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
-  bool _loading = false;
+  final _service = ForumService(); // ✅ ใช้ ForumService ที่แยกออกไปแล้ว
 
+  bool _loading = false;
   String? _fullname;
   String? _avatar;
   String? _userId;
+
+  Uint8List? _webImage; // ✅ เก็บภาพที่เลือก (รองรับเว็บด้วย)
 
   @override
   void initState() {
@@ -25,24 +33,40 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _loadUser();
   }
 
+  /// ✅ โหลดข้อมูลผู้ใช้จาก Firestore
   Future<void> _loadUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance
-        .collection('user') // ✅ ใช้ collection ล่าสุด
+    final snap = await _service.db
+        .collection('user')
         .where('user_email', isEqualTo: user.email)
         .limit(1)
         .get();
 
-    if (doc.docs.isEmpty) return;
-    final data = doc.docs.first.data();
+    if (snap.docs.isEmpty) return;
+    final data = snap.docs.first.data();
 
     setState(() {
       _fullname = data['user_fullname'] ?? user.email ?? 'Unknown';
       _avatar = data['user_img'];
       _userId = data['user_id'].toString();
     });
+  }
+
+  /// ✅ เลือกรูปภาพ (รองรับเว็บ)
+  Future<void> _pickImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        setState(() => _webImage = result.files.first.bytes);
+      }
+    } catch (e) {
+      debugPrint('❌ Error selecting image: $e');
+    }
   }
 
   @override
@@ -75,7 +99,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     width: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Post'),
+                : const Text(
+                    'Post',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
           ),
           const SizedBox(width: 4),
         ],
@@ -83,13 +110,16 @@ class _CreatePostPageState extends State<CreatePostPage> {
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 🧑‍💻 Header (Avatar + Name)
             Row(
               children: [
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: const Color(0xFFDDE3F8),
-                  backgroundImage: _avatar != null ? NetworkImage(_avatar!) : null,
+                  backgroundImage:
+                      _avatar != null ? NetworkImage(_avatar!) : null,
                   child: _avatar == null
                       ? const Icon(Icons.person, color: Colors.white)
                       : null,
@@ -102,15 +132,25 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ],
             ),
             const SizedBox(height: 16),
+
+            // 📝 Title field — ไม่มีกรอบ และตัดบรรทัดอัตโนมัติ
             TextField(
               controller: _titleCtrl,
               onChanged: (_) => setState(() {}),
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
               decoration: const InputDecoration(
                 hintText: 'Enter post title...',
-                border: OutlineInputBorder(),
+                border: InputBorder.none,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+
+            // ✏️ Content field
             Expanded(
               child: TextField(
                 controller: _contentCtrl,
@@ -122,25 +162,55 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 ),
               ),
             ),
+
+            // 🖼 Preview รูปภาพ
+            if (_webImage != null) ...[
+              const SizedBox(height: 10),
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      _webImage!,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black54,
+                      radius: 14,
+                      child: IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.white, size: 14),
+                        onPressed: () => setState(() => _webImage = null),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 8),
+
+            // 📸 ปุ่มเพิ่มรูปภาพ
             Row(
               children: [
                 IconButton(
-                  onPressed: () {},
+                  onPressed: _pickImage,
                   icon: const Icon(Icons.image_outlined),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: canPost ? () => _submit(context) : null,
-                  child: const Text('Post'),
+                  tooltip: 'Add image',
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),
     );
   }
 
+  /// ✅ เมื่อกดโพสต์
   Future<void> _submit(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || _userId == null) {
@@ -153,37 +223,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
     setState(() => _loading = true);
 
     try {
-      // ✅ หา post_id ล่าสุด
-      final snap = await FirebaseFirestore.instance
-          .collection('post')
-          .orderBy('post_id', descending: true)
-          .limit(1)
-          .get();
-
-      int newId = 1;
-      if (snap.docs.isNotEmpty) {
-        final lastIdStr = snap.docs.first['post_id'].toString();
-        newId = int.parse(lastIdStr) + 1;
-      }
-
-      // ✅ ฟอร์แมตเป็น 3 หลัก เช่น 001, 002
-      final formattedId = newId.toString().padLeft(3, '0');
-
-      // ✅ ใช้ post_id เป็น doc id
-      await FirebaseFirestore.instance.collection('post').doc(formattedId).set({
-        'post_id': formattedId,
-        'user_id': _userId,
-        'post_title': _titleCtrl.text.trim(),
-        'post_content': _contentCtrl.text.trim(),
-        'post_img': null,
-        'post_time': FieldValue.serverTimestamp(),
-        'authorName': _fullname ?? user.email ?? 'Unknown',
-        'authorAvatar': _avatar,
-      });
+      // ✅ ใช้ ForumService ที่แยกไว้
+      await _service.createPost(
+        userId: _userId!,
+        title: _titleCtrl.text.trim(),
+        content: _contentCtrl.text.trim(),
+        authorName: _fullname ?? user.email ?? 'Unknown',
+        authorAvatar: _avatar,
+        imageBytes: _webImage,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('โพสต์สำเร็จ')),
+        const SnackBar(content: Text('โพสต์สำเร็จ!')),
       );
       context.pop();
     } catch (e) {
