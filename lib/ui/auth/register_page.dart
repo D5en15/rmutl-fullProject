@@ -4,7 +4,7 @@ import '../../services/register_service.dart';
 import '../../widgets/custom_input.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/otp_button.dart';
-import '../../widgets/app_toast.dart'; // ✅ นำเข้าระบบแจ้งเตือนใหม่
+import '../../widgets/app_toast.dart'; // ✅ ระบบแจ้งเตือนแบบ Toast
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -29,13 +29,18 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _otpVerified = false;
   bool _agree = false;
 
+  /// 🔹 ส่ง OTP
   Future<void> _getOtp() async {
     final email = _email.text.trim().toLowerCase();
-    if (email.isEmpty) return AppToast.error(context, 'Please enter your email first.');
+    if (email.isEmpty) {
+      AppToast.error(context, 'Please enter your email first.');
+      return;
+    }
+
     setState(() => _loading = true);
     try {
       await _service.sendOtp(email);
-      _otpSent = true;
+      setState(() => _otpSent = true);
       AppToast.success(context, 'OTP has been sent to your email.');
     } catch (e) {
       AppToast.error(context, e.toString().replaceAll('Exception: ', ''));
@@ -44,14 +49,20 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  /// 🔹 ตรวจสอบ OTP
   Future<void> _verifyOtp() async {
     final email = _email.text.trim().toLowerCase();
     final code = _otp.text.trim();
-    if (code.length != 6) return AppToast.info(context, 'Please enter a 6-digit OTP.');
+
+    if (code.length != 6) {
+      AppToast.info(context, 'Please enter a 6-digit OTP.');
+      return;
+    }
+
     setState(() => _loading = true);
     try {
       await _service.verifyOtp(email, code);
-      _otpVerified = true;
+      setState(() => _otpVerified = true);
       AppToast.success(context, 'OTP verified successfully.');
     } catch (e) {
       AppToast.error(context, e.toString().replaceAll('Exception: ', ''));
@@ -60,10 +71,17 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  /// 🔹 สมัครสมาชิก
   Future<void> _register() async {
     if (!(_form.currentState?.validate() ?? false)) return;
-    if (!_agree) return AppToast.info(context, 'Please accept terms & conditions.');
-    if (!_otpVerified) return AppToast.info(context, 'Please verify your OTP first.');
+    if (!_agree) {
+      AppToast.info(context, 'Please accept terms & conditions.');
+      return;
+    }
+    if (!_otpVerified) {
+      AppToast.info(context, 'Please verify your OTP first.');
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -80,6 +98,17 @@ class _RegisterPageState extends State<RegisterPage> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _fullname.dispose();
+    _email.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    _otp.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,7 +151,7 @@ class _RegisterPageState extends State<RegisterPage> {
               CustomInput(controller: _email, label: "Email"),
               const SizedBox(height: 16),
 
-              // ✅ ปรับปุ่ม OTP ให้อยู่ระดับเดียวกับช่องกรอก
+              /// 🔹 ช่อง OTP + ปุ่ม
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -145,15 +174,22 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
 
               const SizedBox(height: 16),
-              CustomInput(controller: _password, label: "Password", obscure: true),
+              CustomInput(
+                controller: _password,
+                label: "Password",
+                obscure: true,
+              ),
               const SizedBox(height: 16),
               CustomInput(
                 controller: _confirm,
                 label: "Confirm Password",
                 obscure: true,
-                validator: (v) => v != _password.text ? "Passwords do not match" : null,
+                validator: (v) =>
+                    v != _password.text ? "Passwords do not match" : null,
               ),
               const SizedBox(height: 20),
+
+              /// 🔹 Terms & Conditions
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -171,11 +207,14 @@ class _RegisterPageState extends State<RegisterPage> {
                 ],
               ),
               const SizedBox(height: 20),
+
+              /// 🔹 ปุ่มสมัครสมาชิก
               CustomButton(
                 text: "Create Account",
                 loading: _loading,
                 onPressed: _register,
               ),
+
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

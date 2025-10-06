@@ -33,7 +33,12 @@ dependencies:
   image_cropper: ^11.0.0
   file_picker: ^10.3.3
 
+  email_otp:
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
