@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.threadId});
-  final String threadId;
+  final String chatsId;
+  const ChatPage({super.key, required this.chatsId});
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -17,57 +17,101 @@ class _ChatPageState extends State<ChatPage> {
   static const _primary = Color(0xFF3D5CFF);
   static const _bubbleBg = Color(0xFFF4F6FF);
 
+  String? otherUserName;
+  String? otherUserImg;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChatPartner();
+  }
+
+  Future<void> _loadChatPartner() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final mySnap = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_email', isEqualTo: user.email)
+        .limit(1)
+        .get();
+
+    if (mySnap.docs.isEmpty) return;
+    final myId = mySnap.docs.first['user_id'].toString();
+
+    final chat = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatsId)
+        .get();
+
+    if (!chat.exists) return;
+    final chatData = chat.data()!;
+    final otherId = chatData['participants0'] == myId
+        ? chatData['participants1']
+        : chatData['participants0'];
+
+    final otherSnap = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_id', isEqualTo: otherId)
+        .limit(1)
+        .get();
+
+    if (otherSnap.docs.isNotEmpty) {
+      final u = otherSnap.docs.first.data();
+      setState(() {
+        otherUserName = u['user_fullname'] ?? 'Chat';
+        otherUserImg = u['user_img'];
+      });
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
+  /// ✅ ฟังก์ชันส่งข้อความใหม่ (Hybrid timestamp)
   Future<void> _send(String text) async {
     if (text.trim().isEmpty) return;
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final chatRef =
-        FirebaseFirestore.instance.collection('chats').doc(widget.threadId);
+    try {
+      final userSnap = await FirebaseFirestore.instance
+          .collection('user')
+          .where('user_email', isEqualTo: user.email)
+          .limit(1)
+          .get();
 
-    // ✅ ดึง participants เดิมจาก chat
-    final snap = await chatRef.get();
-    List<dynamic> participants = [];
-    if (snap.exists) {
-      final data = snap.data() as Map<String, dynamic>;
-      participants = List.from(data['participants'] ?? []);
+      if (userSnap.docs.isEmpty) return;
+      final uData = userSnap.docs.first.data();
+      final userId = uData['user_id'];
+      final userName = uData['user_fullname'] ?? user.email ?? 'Unknown';
+
+      final chatRef =
+          FirebaseFirestore.instance.collection('chats').doc(widget.chatsId);
+
+      // ✅ บันทึกข้อความด้วยเวลาท้องถิ่นทันที
+      await chatRef.collection('messages').add({
+        'chats_id': widget.chatsId,
+        'user_id': userId,
+        'user_name': userName,
+        'text': text.trim(),
+        'createdAt': DateTime.now(), // 🕒 local timestamp
+      });
+
+      // ✅ อัปเดตข้อมูลห้อง (เวลา + ข้อความล่าสุด)
+      await chatRef.update({
+        'updatedAt': FieldValue.serverTimestamp(),
+        'last_message': text.trim(),
+      });
+
+      _controller.clear();
+    } catch (e) {
+      debugPrint('❌ Send message failed: $e');
     }
-
-    // ✅ หา otherUid จาก chatId (split ด้วย "_")
-    final ids = widget.threadId.split("_");
-    String? otherUid;
-    if (ids.length == 2) {
-      otherUid = ids.firstWhere((id) => id != user.uid, orElse: () => user.uid);
-    }
-
-    // ✅ เพิ่ม currentUser + otherUid ลง participants
-    final updatedParticipants = {
-      user.uid,
-      if (otherUid != null) otherUid,
-      ...participants,
-    }.toList();
-
-    await chatRef.set({
-      'participants': updatedParticipants,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    // ✅ เพิ่ม message
-    await chatRef.collection('messages').add({
-      'text': text.trim(),
-      'senderId': user.uid,
-      'senderName': user.displayName ?? user.email ?? 'Unknown',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
-    _controller.clear();
   }
 
   @override
@@ -80,7 +124,7 @@ class _ChatPageState extends State<ChatPage> {
         bottom: false,
         child: Column(
           children: [
-            // ---------- AppBar ----------
+            // ---------- Header ----------
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
               child: Row(
@@ -89,28 +133,39 @@ class _ChatPageState extends State<ChatPage> {
                     icon: const Icon(Icons.arrow_back_ios_new_rounded),
                     onPressed: () => context.pop(),
                   ),
-                  const Spacer(),
-                  const Text(
-                    'Chat',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        otherUserName ?? 'Chat',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
-                  const Spacer(),
-                  const CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Color(0xFFE8EEF9),
-                    child: Icon(Icons.person, color: Colors.black54, size: 18),
-                  )
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFE8EEF9),
+                    backgroundImage: (otherUserImg != null &&
+                            otherUserImg!.trim().isNotEmpty)
+                        ? NetworkImage(otherUserImg!)
+                        : null,
+                    child: (otherUserImg == null ||
+                            otherUserImg!.trim().isEmpty)
+                        ? const Icon(Icons.person, color: Colors.black54)
+                        : null,
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const Divider(height: 1),
 
-            // ---------- Messages ----------
+            // ---------- Message List ----------
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('chats')
-                    .doc(widget.threadId)
+                    .doc(widget.chatsId)
                     .collection('messages')
                     .orderBy('createdAt', descending: false)
                     .snapshots(),
@@ -128,16 +183,40 @@ class _ChatPageState extends State<ChatPage> {
                     itemCount: docs.length,
                     itemBuilder: (_, i) {
                       final data = docs[i].data() as Map<String, dynamic>;
-                      final isMe = data['senderId'] == user?.uid;
-                      return Align(
-                        alignment:
-                            isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: _Bubble(
-                          left: !isMe,
-                          label: data['senderName'] ?? 'Unknown',
-                          text: data['text'] ?? '',
-                          time: (data['createdAt'] as Timestamp?)?.toDate(),
-                        ),
+                      final text = data['text'] ?? '';
+                      final senderId = data['user_id'];
+                      final senderName = data['user_name'] ?? 'Unknown';
+                      final time = (data['createdAt'] is Timestamp)
+                          ? (data['createdAt'] as Timestamp).toDate()
+                          : (data['createdAt'] as DateTime?);
+
+                      return FutureBuilder<QuerySnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('user')
+                            .where('user_id', isEqualTo: senderId)
+                            .limit(1)
+                            .get(),
+                        builder: (context, userSnap) {
+                          bool isMe = false;
+                          if (userSnap.hasData &&
+                              userSnap.data!.docs.isNotEmpty) {
+                            final email =
+                                userSnap.data!.docs.first['user_email'];
+                            isMe = email == user?.email;
+                          }
+
+                          return Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: _Bubble(
+                              left: !isMe,
+                              label: senderName,
+                              text: text,
+                              time: time,
+                            ),
+                          );
+                        },
                       );
                     },
                   );
@@ -145,7 +224,7 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
 
-            // ---------- Input Bar ----------
+            // ---------- Input ----------
             SafeArea(
               top: false,
               child: Padding(
@@ -171,8 +250,7 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                     IconButton(
                       onPressed: () => _send(_controller.text),
-                      icon: const Icon(Icons.send_rounded,
-                          color: Color(0xFF3D5CFF)),
+                      icon: const Icon(Icons.send_rounded, color: _primary),
                     ),
                   ],
                 ),
@@ -186,17 +264,17 @@ class _ChatPageState extends State<ChatPage> {
 }
 
 class _Bubble extends StatelessWidget {
+  final bool left;
+  final String label;
+  final String text;
+  final DateTime? time;
+
   const _Bubble({
     required this.left,
     required this.label,
     required this.text,
     this.time,
   });
-
-  final bool left;
-  final String label;
-  final String text;
-  final DateTime? time;
 
   static const _primary = Color(0xFF3D5CFF);
   static const _bubbleBg = Color(0xFFF4F6FF);
@@ -233,17 +311,21 @@ class _Bubble extends StatelessWidget {
           if (left)
             Padding(
               padding: const EdgeInsets.only(left: 8, bottom: 4),
-              child: Text(label,
-                  style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           Container(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * .76,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(color: bg, borderRadius: radius),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +336,8 @@ class _Bubble extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       _formatTime(time),
-                      style: TextStyle(color: fg.withOpacity(0.7), fontSize: 10),
+                      style:
+                          TextStyle(color: fg.withOpacity(0.7), fontSize: 10),
                     ),
                   ),
               ],

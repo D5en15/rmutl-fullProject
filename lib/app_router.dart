@@ -111,7 +111,7 @@ class AppRouter {
       GoRoute(path: '/admin/messages', builder: (_, __) => const MessagesPage()),
       GoRoute(
         path: '/chat/:id',
-        builder: (_, s) => ChatPage(threadId: s.pathParameters['id']!),
+        builder: (_, s) => ChatPage(chatsId: s.pathParameters['id']!),
       ),
 
       // ================= STUDENT =================

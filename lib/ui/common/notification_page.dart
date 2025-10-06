@@ -34,7 +34,6 @@ class NotificationPage extends StatelessWidget {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          // ✅ กลับไปหน้าหลักของบทบาทที่ล็อกอินมา
           onPressed: () => context.go(base),
         ),
         backgroundColor: Colors.white,
@@ -43,21 +42,24 @@ class NotificationPage extends StatelessWidget {
       ),
       body: Column(
         children: [
+          // 🔹 แถบเมนู (เต็มความกว้าง + แบ่งครึ่ง)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
             child: Row(
               children: [
-                _TabButton(
-                  text: 'notification',
-                  isActive: true,
-                  onTap: () {},
+                Expanded(
+                  child: _TabButton(
+                    text: 'notification',
+                    isActive: true,
+                    onTap: () {},
+                  ),
                 ),
-                const SizedBox(width: 18),
-                _TabButton(
-                  text: 'message',
-                  isActive: false,
-                  trailingDot: false,
-                  onTap: () => context.push('$base/messages'),
+                Expanded(
+                  child: _TabButton(
+                    text: 'message',
+                    isActive: false,
+                    onTap: () => context.go('$base/messages'),
+                  ),
                 ),
               ],
             ),
@@ -89,17 +91,16 @@ class NotificationPage extends StatelessWidget {
   }
 }
 
+/// ✅ ปุ่ม Tab (แบ่งครึ่งและจัดกลาง)
 class _TabButton extends StatelessWidget {
   const _TabButton({
     required this.text,
     required this.isActive,
-    this.trailingDot = false,
     this.onTap,
   });
 
   final String text;
   final bool isActive;
-  final bool trailingDot;
   final VoidCallback? onTap;
 
   static const _primary = Color(0xFF3D5CFF);
@@ -109,32 +110,16 @@ class _TabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isActive ? Colors.black87 : _muted;
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  text,
-                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
-                ),
-                if (trailingDot) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: Colors.orange,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
+            Text(
+              text,
+              style: TextStyle(fontWeight: FontWeight.w700, color: color),
             ),
             const SizedBox(height: 6),
             AnimatedContainer(
