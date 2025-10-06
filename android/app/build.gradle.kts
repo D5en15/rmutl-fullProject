@@ -1,5 +1,8 @@
 // android/app/build.gradle.kts
 
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -8,7 +11,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.flutter_project" // ✅ ตั้งชื่อแพ็กเกจให้ตรงกับ Firebase & google-services.json
+    namespace = "com.example.flutter_project" // ✅ ให้ตรงกับ Firebase project name
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,12 +19,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
+    kotlinOptions { jvmTarget = "11" }
 
     defaultConfig {
-        applicationId = "com.example.flutter_project" // ✅ ชื่อเดียวกับ Firebase
+        applicationId = "com.example.flutter_project"
         minSdk = maxOf(flutter.minSdkVersion, 21)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -29,13 +30,28 @@ android {
         multiDexEnabled = true
     }
 
+    // 🔹 ลองโหลด key.properties ถ้ามี
+    val keystoreProperties = Properties()
+    val keystoreFile = rootProject.file("key.properties")
+    if (keystoreFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystoreFile))
+    }
+
     signingConfigs {
         create("release") {
-            // 🔹 ใช้ debug key ชั่วคราว (build ได้เลย)
-            storeFile = file("${rootDir}/app/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            if (keystoreFile.exists()) {
+                // ✅ ใช้ key.properties จริง (ถ้ามี)
+                storeFile = file(keystoreProperties["storeFile"] ?: "")
+                storePassword = keystoreProperties["storePassword"]?.toString()
+                keyAlias = keystoreProperties["keyAlias"]?.toString()
+                keyPassword = keystoreProperties["keyPassword"]?.toString()
+            } else {
+                // ✅ ถ้าไม่มี key.properties → ใช้ debug.keystore
+                storeFile = file("${rootDir}/app/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
@@ -44,8 +60,6 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
         getByName("release") {
-            // 🔹 ถ้ามี key.properties จริง → ให้ใช้ release key
-            // 🔹 ถ้ายังไม่มี → จะ fallback ไปใช้ debug.keystore (build ได้แน่นอน)
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
@@ -58,14 +72,14 @@ flutter {
 }
 
 dependencies {
-    // 🔹 Firebase BoM – กำหนดเวอร์ชันรวมให้อัตโนมัติ
+    // ✅ Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
 
-    // 🔹 SDKs ที่ใช้จริง (อย่าคอมเมนต์ไว้ถ้าใช้งาน)
+    // ✅ Firebase SDKs
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
 
-    // 🔹 Multidex รองรับ method เกิน 64K
+    // ✅ รองรับ multidex
     implementation("androidx.multidex:multidex:2.0.1")
 }

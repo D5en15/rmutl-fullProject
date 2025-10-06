@@ -37,7 +37,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
     authDomain: 'rmutl-fullproject.firebaseapp.com',
-    storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    storageBucket: 'rmutl-fullproject.appspot.app',
     measurementId: 'G-ZTW770HRL3',
     databaseURL:
         'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
@@ -48,7 +48,7 @@ class DefaultFirebaseOptions {
     appId: '1:576400581098:android:ccad7bd5ffe2c58234d293',
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
-    storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    storageBucket: 'rmutl-fullproject.appspot.app',
     databaseURL:
         'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
   );
@@ -58,7 +58,7 @@ class DefaultFirebaseOptions {
     appId: '1:576400581098:ios:e69d3ea01353e63334d293',
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
-    storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    storageBucket: 'rmutl-fullproject.appspot.app',
     iosBundleId: 'com.example.flutterProject',
     databaseURL:
         'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
@@ -69,7 +69,7 @@ class DefaultFirebaseOptions {
     appId: '1:576400581098:ios:e69d3ea01353e63334d293',
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
-    storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    storageBucket: 'rmutl-fullproject.appspot.app',
     iosBundleId: 'com.example.flutterProject',
     databaseURL:
         'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
@@ -81,7 +81,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '576400581098',
     projectId: 'rmutl-fullproject',
     authDomain: 'rmutl-fullproject.firebaseapp.com',
-    storageBucket: 'rmutl-fullproject.firebasestorage.app',
+    storageBucket: 'rmutl-fullproject.appspot.app',
     measurementId: 'G-D6KJLX53P4',
     databaseURL:
         'https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app',
