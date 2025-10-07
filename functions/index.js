@@ -4,40 +4,24 @@ const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
-// 🟦 Gmail App Password (เปิดในบัญชี Gmail)
 const APP_EMAIL = "nonteerapong8@gmail.com";
-const APP_PASSWORD = "xhzb frsc niit aeih"; // App password จาก Google
+const APP_PASSWORD = "gpyg ofrp vzsx zfwx";
 
-// 🟩 ตั้งค่า mail transporter
 const transporter = nodemailer.createTransport({
   service: "gmail",
-  auth: {
-    user: APP_EMAIL,
-    pass: APP_PASSWORD,
-  },
+  auth: { user: APP_EMAIL, pass: APP_PASSWORD },
 });
+exports.sendOtpEmail = functions.https.onCall(async (data, context) => {
+ const email = data?.email || data?.data?.email;
+  const code = data?.code || data?.data?.code;
 
-// ✅ ฟังก์ชันส่ง OTP (Cloud Function แบบ callable)
-exports.sendOtpEmail = functions
-  .region("us-central1") // ต้องตรงกับ region ที่ Flutter เรียกใช้
-  .https.onCall(async (data, context) => {
-    // 🟦 Log ตรวจสอบค่าที่ Flutter ส่งมา
-    console.log("📩 Received data from client:", JSON.stringify(data));
+  if (!email || !code) {
+    console.error("❌ Missing email or code. Received:", data);
+    throw new functions.https.HttpsError("invalid-argument", "Missing email or code.");
+  }
 
-    // 🔹 ตรวจสอบค่า email และ code
-    const email = data?.email;
-    const code = data?.code;
-
-    if (!email || !code) {
-      console.error("❌ Missing email or code. Received:", data);
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Missing email or code."
-      );
-    }
-
-    // 🔹 ตั้งค่าเนื้อหาอีเมล
-    const mailOptions = {
+  try {
+    await transporter.sendMail({
       from: `"RMUTL App" <${APP_EMAIL}>`,
       to: email,
       subject: "Your OTP Code",
@@ -49,17 +33,13 @@ exports.sendOtpEmail = functions
           <p>This code will expire in 10 minutes.</p>
         </div>
       `,
-    };
+    });
 
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log(`✅ OTP sent successfully to ${email}`);
-      return { success: true };
-    } catch (error) {
-      console.error("❌ Error sending email:", error);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Failed to send email: " + error.message
-      );
-    }
-  });
+    // ส่งสำเร็จ → return result
+    return { success: true };
+  } catch (ex) {
+    console.error("❌ Failed to send email:", ex);
+    throw new functions.https.HttpsError("unknown", ex.message || String(ex));
+  }
+});
+

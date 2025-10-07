@@ -3,11 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../models/user_model.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 
 class RegisterService {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instanceFor(region: 'us-central1'); // ✅ ให้ตรง region
+  final _functions = FirebaseFunctions.instanceFor(
+    region: 'us-central1',
+  ); // ✅ ให้ตรง region
 
   /// ✅ ส่ง OTP ผ่าน Firebase Cloud Function
   Future<void> sendOtp(String email) async {
@@ -15,51 +18,47 @@ class RegisterService {
     final methods = await _auth.fetchSignInMethodsForEmail(email);
     if (methods.isNotEmpty) throw Exception('This email is already in use.');
 
-    final exists = await _db
-        .collection('user')
-        .where('user_email', isEqualTo: email)
-        .limit(1)
-        .get();
-    if (exists.docs.isNotEmpty) throw Exception('This email is already in use.');
+    final exists =
+        await _db
+            .collection('user')
+            .where('user_email', isEqualTo: email)
+            .limit(1)
+            .get();
+    if (exists.docs.isNotEmpty)
+      throw Exception('This email is already in use.');
 
     // 🔹 สร้างรหัส OTP 6 หลัก
     final code = List.generate(6, (_) => Random.secure().nextInt(10)).join();
 
     // 🔹 บันทึกลง Firestore
     final now = Timestamp.now();
-    final expires = Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 10)));
+    final expires = Timestamp.fromDate(
+      DateTime.now().add(const Duration(minutes: 10)),
+    );
     await _db.collection('email_otp').doc(email).set({
       'otp_code': code,
       'otp_created': now,
       'otp_expire': expires,
     });
-
     try {
-      // 🔹 เรียกใช้ Cloud Function
-      final callable = _functions.httpsCallable('sendOtpEmail');
-      print('📤 Sending to Cloud Function: email=$email | code=$code');
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.debug,
+        appleProvider: AppleProvider.debug,
+      );
 
-      final result = await callable.call({
+      print('Sending email: $email, code: $code');
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+
+      final result = await functions.httpsCallable('sendOtpEmail').call({
         'email': email,
         'code': code,
       });
 
-      print('📥 Function Response: ${result.data}');
-
-      // ✅ ตรวจสอบผลลัพธ์จากฟังก์ชัน
-      if (result.data == null) {
-        throw Exception('No response from server.');
-      }
-
-      if (result.data is Map && result.data['success'] != true) {
-        throw Exception('Server error while sending OTP.');
-      }
+      print('✅ Result: ${result.data}');
     } on FirebaseFunctionsException catch (e) {
-      print('❌ Firebase Function Error: ${e.code} | ${e.message}');
-      throw Exception('[${e.code}] ${e.message ?? 'Failed to send OTP email.'}');
+      print('❌ Error: ${e.message}');
     } catch (e) {
-      print('❌ Unexpected Error: $e');
-      throw Exception('Failed to send OTP email. $e');
+      print('❌ Unexpected: $e');
     }
   }
 
