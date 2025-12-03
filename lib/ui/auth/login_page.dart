@@ -19,6 +19,19 @@ class _LoginPageState extends State<LoginPage> {
   bool obscure = true;
   bool loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _redirectIfLoggedIn());
+  }
+
+  Future<void> _redirectIfLoggedIn() async {
+    final current = await _authService.getCurrentUserWithRole();
+    if (current == null || !mounted) return;
+    final role = (current['role'] ?? '').toString().toLowerCase();
+    _goByRole(role);
+  }
+
   Future<void> _login() async {
     final input = emailCtrl.text.trim();
     final pass = passCtrl.text.trim();
@@ -35,23 +48,27 @@ class _LoginPageState extends State<LoginPage> {
       final role = (result['role'] ?? '').toString().toLowerCase();
 
       AppToast.success(context, 'Login successful.');
-
-      switch (role) {
-        case 'admin':
-          context.go('/admin');
-          break;
-        case 'teacher':
-          context.go('/teacher');
-          break;
-        default:
-          context.go('/student');
-      }
+      _goByRole(role);
     } on AuthException catch (e) {
       AppToast.error(context, e.message);
     } catch (_) {
       AppToast.error(context, "Invalid credentials. Please try again.");
     } finally {
       setState(() => loading = false);
+    }
+  }
+
+  void _goByRole(String role) {
+    if (!mounted) return;
+    switch (role) {
+      case 'admin':
+        context.go('/admin');
+        break;
+      case 'teacher':
+        context.go('/teacher');
+        break;
+      default:
+        context.go('/student');
     }
   }
 
@@ -85,7 +102,7 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomInput(controller: emailCtrl, label: "Email or Username"),
+            CustomInput(controller: emailCtrl, label: "Email or Student ID"),
             const SizedBox(height: 20),
             CustomInput(
               controller: passCtrl,

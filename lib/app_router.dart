@@ -19,7 +19,7 @@ import 'ui/common/edit_profile_page.dart';
 import 'models/edit_profile_initial.dart';
 
 // ---------- STUDENT ----------
-import 'ui/student/home_page.dart' as s;
+import 'ui/student/student_home_page.dart' as s;
 import 'ui/student/grades_page.dart';
 import 'ui/student/edit_grade_page.dart';
 import 'ui/student/career_page.dart';

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -14,7 +15,6 @@ class StudentHomePage extends StatelessWidget {
   static const _bgSoft = Color(0xFFF6F7FF);
   static const _accentOrange = Color(0xFFFF7A50);
 
-  // ✅ ดึงข้อมูลจาก Cloud Function
   Future<Map<String, dynamic>> _fetchMetrics() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("Not logged in");
@@ -36,6 +36,19 @@ class StudentHomePage extends StatelessWidget {
     return jsonDecode(response.body);
   }
 
+  Future<Map<String, dynamic>?> _loadUserProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final qs = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_email', isEqualTo: user.email)
+        .limit(1)
+        .get();
+    if (qs.docs.isEmpty) return null;
+    return qs.docs.first.data();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,8 +62,11 @@ class StudentHomePage extends StatelessWidget {
               return const Center(child: Text("⚠ กรุณาล็อกอินก่อนเข้าหน้านี้"));
             }
 
-            return FutureBuilder<Map<String, dynamic>>(
-              future: _fetchMetrics(),
+            return FutureBuilder<List<dynamic>>(
+              future: Future.wait([
+                _fetchMetrics(),
+                _loadUserProfile(),
+              ]),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -67,18 +83,23 @@ class StudentHomePage extends StatelessWidget {
                   return const Center(child: Text("ไม่พบข้อมูลจากระบบ"));
                 }
 
-                // ✅ ข้อมูลจริงจาก Cloud Function
-                final data = snapshot.data!;
-                final gpa = (data['gpa'] as num?)?.toDouble() ?? 0;
+                final metrics = snapshot.data![0] as Map<String, dynamic>;
+                final userProfile =
+                    snapshot.data!.length > 1 && snapshot.data![1] != null
+                        ? snapshot.data![1] as Map<String, dynamic>
+                        : null;
+
+                final gpa = (metrics['gpa'] as num?)?.toDouble() ?? 0;
                 final gpaBySemester =
-                    Map<String, dynamic>.from(data['gpaBySemester'] ?? {});
+                    Map<String, dynamic>.from(metrics['gpaBySemester'] ?? {});
                 final subploScores =
-                    Map<String, dynamic>.from(data['subploScores'] ?? {});
+                    Map<String, dynamic>.from(metrics['subploScores'] ?? {});
                 final ploScores =
-                    Map<String, dynamic>.from(data['ploScores'] ?? {});
+                    Map<String, dynamic>.from(metrics['ploScores'] ?? {});
                 final careerScores =
-                    List<Map<String, dynamic>>.from(data['careerScores'] ?? []);
-                final fullname = data['user_fullname'] ?? "Student";
+                    List<Map<String, dynamic>>.from(metrics['careerScores'] ?? []);
+                final avatarUrl =
+                    (userProfile?['user_img'] as String?)?.trim();
 
                 // ✅ หา Top PLO
                 String topPlo = "Unknown";
@@ -92,7 +113,7 @@ class StudentHomePage extends StatelessWidget {
                     topPloValue = score;
                     topPlo = key;
                     final desc = val["description"] ?? key;
-                    topPloDesc = "$desc (${score.toStringAsFixed(2)}/4.00)";
+                    topPloDesc = desc;
                   }
                 });
 
@@ -104,7 +125,7 @@ class StudentHomePage extends StatelessWidget {
                   final percent =
                       ((score / 4.0) * 100).clamp(0, 100).toInt();
                   skills.add({
-                    "title": "$key: $desc",
+                    "title": desc,
                     "percent": percent,
                   });
                 });
@@ -116,7 +137,17 @@ class StudentHomePage extends StatelessWidget {
                 return SingleChildScrollView(
                   child: Column(
                     children: [
-                      _HeaderWithFloatingGpa(fullname: fullname, gpa: gpa),
+                      _HeaderWithFloatingGpa(
+                        roleLabel: 'Student',
+                        subtitle:
+                            'Track progress and unlock personalized career skills.',
+                        gpa: gpa,
+                        photoUrl: avatarUrl,
+                        onProfileTap: () => context.go(
+                          '/profile/edit',
+                          extra: const {'role': 'student'},
+                        ),
+                      ),
                       const SizedBox(height: 100),
                       _GradeProgressCard(gpaBySemester: gpaBySemester),
                       const SizedBox(height: 16),
@@ -145,16 +176,30 @@ class StudentHomePage extends StatelessWidget {
 /// 🔵 Header + GPA Floating
 /// -----------------------------------------------------------------
 class _HeaderWithFloatingGpa extends StatelessWidget {
-  const _HeaderWithFloatingGpa({required this.fullname, required this.gpa});
-  final String fullname;
+  const _HeaderWithFloatingGpa({
+    required this.roleLabel,
+    required this.subtitle,
+    required this.gpa,
+    required this.photoUrl,
+    required this.onProfileTap,
+  });
+  final String roleLabel;
+  final String subtitle;
   final double gpa;
+  final String? photoUrl;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        _BlueHeader(fullname: fullname),
+        _BlueHeader(
+          roleLabel: roleLabel,
+          subtitle: subtitle,
+          photoUrl: photoUrl,
+          onProfileTap: onProfileTap,
+        ),
         Positioned(
           left: 16,
           right: 16,
@@ -167,8 +212,16 @@ class _HeaderWithFloatingGpa extends StatelessWidget {
 }
 
 class _BlueHeader extends StatelessWidget {
-  const _BlueHeader({required this.fullname});
-  final String fullname;
+  const _BlueHeader({
+    required this.roleLabel,
+    required this.subtitle,
+    required this.photoUrl,
+    required this.onProfileTap,
+  });
+  final String roleLabel;
+  final String subtitle;
+  final String? photoUrl;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +250,7 @@ class _BlueHeader extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Hi, $fullname',
+                  roleLabel,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
@@ -206,19 +259,28 @@ class _BlueHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  "Let's start learning",
+                Text(
+                  subtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          const CircleAvatar(
-            radius: 22,
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, color: Colors.black54, size: 22),
+          InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: onProfileTap,
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: Colors.white,
+              backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
+                  ? NetworkImage(photoUrl!)
+                  : null,
+              child: (photoUrl == null || photoUrl!.isEmpty)
+                  ? const Icon(Icons.person, color: Colors.black54, size: 22)
+                  : null,
+            ),
           ),
         ],
       ),
@@ -294,9 +356,17 @@ class _GradeProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final semesters = gpaBySemester.keys.toList()..sort();
-    final values =
-        semesters.map((s) => (gpaBySemester[s] as num).toDouble()).toList();
+    final entries = gpaBySemester.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final mapped = entries
+        .map((e) => {
+              "label": _formatLabel(e.key),
+              "value": (e.value as num).toDouble(),
+            })
+        .toList();
+    final trimmed = mapped.length > 8 ? mapped.sublist(mapped.length - 8) : mapped;
+    final values = trimmed.map((e) => e["value"] as double).toList();
+    final labels = trimmed.map((e) => e["label"] as String).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -310,12 +380,25 @@ class _GradeProgressCard extends StatelessWidget {
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
-            height: 200,
-            child: CustomPaint(painter: _LineChartPainter(values, semesters)),
+            height: 220,
+            child: CustomPaint(
+              painter: _LineChartPainter(values, labels),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatLabel(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^0-9/]'), '');
+    final parts = cleaned.split('/');
+    if (parts.length >= 2) {
+      final year = int.tryParse(parts[0]) ?? parts[0];
+      final term = int.tryParse(parts[1]) ?? parts[1];
+      return "Y$year · T$term";
+    }
+    return raw;
   }
 }
 
@@ -340,11 +423,10 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final double paddingLeft = 30;
-    final double paddingBottom = 24;
+    final double paddingBottom = 28;
     final chartWidth = size.width - paddingLeft;
     final chartHeight = size.height - paddingBottom;
 
-    // แกน X Y
     canvas.drawLine(
       Offset(paddingLeft, chartHeight),
       Offset(size.width, chartHeight),
@@ -356,7 +438,6 @@ class _LineChartPainter extends CustomPainter {
       axis,
     );
 
-    // Y labels
     const maxGrade = 4;
     for (int g = 0; g <= maxGrade; g++) {
       final y = chartHeight - (g / maxGrade) * chartHeight;
@@ -369,43 +450,41 @@ class _LineChartPainter extends CustomPainter {
       )..layout();
       tp.paint(canvas, Offset(0, y - 6));
 
-      // grid line
       canvas.drawLine(
         Offset(paddingLeft, y),
         Offset(size.width, y),
         Paint()
-          ..color = Colors.grey.shade300
+          ..color = Colors.grey.shade200
           ..strokeWidth = 0.5,
       );
     }
 
-    // X labels
+    if (data.isEmpty) return;
     final dx = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
-    for (int i = 0; i < labels.length; i++) {
-      final x = paddingLeft + i * dx;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: labels[i],
-          style: const TextStyle(fontSize: 10, color: Colors.black54),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, chartHeight + 4));
-    }
-
-    // plot line + จุด
     final path = Path();
+
     for (int i = 0; i < data.length; i++) {
       final x = paddingLeft + i * dx;
       final y = chartHeight - (data[i] / maxGrade) * chartHeight;
-
       if (i == 0) {
         path.moveTo(x, y);
       } else {
         path.lineTo(x, y);
       }
       canvas.drawCircle(Offset(x, y), 3, dot);
+
+      if (i < labels.length) {
+        final tp = TextPainter(
+          text: TextSpan(
+            text: labels[i],
+            style: const TextStyle(fontSize: 10, color: Colors.black54),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x - tp.width / 2, chartHeight + 6));
+      }
     }
+
     canvas.drawPath(path, line);
   }
 
@@ -473,7 +552,7 @@ class _SkillStrengths extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Skill strengths (Top 5 SubPLO)',
+                'Skill strengths',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
               const SizedBox(height: 10),
@@ -511,7 +590,13 @@ class _SkillBar extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              Text('$percent%'),
+              Text(
+                '$percent%',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black54,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -561,9 +646,11 @@ class _RecommendedCareers extends StatelessWidget {
             final percent = (career["percent"] as num?)?.toInt() ?? 0;
 
             return Card(
-              elevation: 2,
+              color: Colors.white,
+              elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.black.withOpacity(0.05)),
               ),
               child: ListTile(
                 leading: const Icon(Icons.work_outline,
@@ -575,8 +662,10 @@ class _RecommendedCareers extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
+                    border:
+                        Border.all(color: StudentHomePage._primary, width: 1),
                   ),
                   child: Text(
                     "$percent%",

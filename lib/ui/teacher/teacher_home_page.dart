@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// ---------- Design tokens ----------
 class _T {
@@ -18,11 +19,11 @@ class TeacherHomePage extends StatefulWidget {
 }
 
 class _TeacherHomePageState extends State<TeacherHomePage> {
-  String? _teacherName;
   int _total = 0;
   int _students = 0;
   int _teachers = 0;
   int _admins = 0;
+  String? _avatarUrl;
 
   String? _room; // ✅ null ตอนเริ่มต้น
   final _rooms = const ['SE66_A', 'SE66_B', 'SE67_A', 'SE67_B'];
@@ -37,7 +38,9 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
     final snap = await FirebaseFirestore.instance.collection('user').get();
 
     int students = 0, teachers = 0, admins = 0;
-    String? teacherName;
+    String? avatarUrl;
+    final currentEmail =
+        FirebaseAuth.instance.currentUser?.email?.toLowerCase();
 
     for (var doc in snap.docs) {
       final data = doc.data();
@@ -47,8 +50,9 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
       if (role == 'teacher') teachers++;
       if (role == 'admin') admins++;
 
-      if (role == 'teacher' && teacherName == null) {
-        teacherName = data['user_fullname'] ?? data['user_name'] ?? 'Teacher';
+      final email = (data['user_email'] ?? '').toString().toLowerCase();
+      if (currentEmail != null && email == currentEmail) {
+        avatarUrl = (data['user_img'] as String?)?.trim();
       }
     }
 
@@ -57,7 +61,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
       _teachers = teachers;
       _admins = admins;
       _total = students + teachers + admins;
-      _teacherName = teacherName;
+      _avatarUrl = avatarUrl;
     });
   }
 
@@ -70,7 +74,16 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              _BlueHeader(teacherName: _teacherName ?? 'Teacher'),
+              _BlueHeader(
+                roleLabel: 'Teacher',
+                subtitle:
+                    'Monitor student performance and guide their growth.',
+                photoUrl: _avatarUrl,
+                onProfileTap: () => context.go(
+                  '/profile/edit',
+                  extra: const {'role': 'teacher'},
+                ),
+              ),
               _Body(
                 total: _total,
                 students: _students,
@@ -90,8 +103,16 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
 
 /// ---------- BLUE HEADER ----------
 class _BlueHeader extends StatelessWidget {
-  const _BlueHeader({required this.teacherName});
-  final String teacherName;
+  const _BlueHeader({
+    required this.roleLabel,
+    required this.subtitle,
+    required this.photoUrl,
+    required this.onProfileTap,
+  });
+  final String roleLabel;
+  final String subtitle;
+  final String? photoUrl;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +127,7 @@ class _BlueHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Hi, $teacherName',
+                roleLabel,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
@@ -115,9 +136,9 @@ class _BlueHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                "Let's start teaching",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+              Text(
+                subtitle,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ],
           ),
@@ -136,12 +157,17 @@ class _BlueHeader extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: InkWell(
-              onTap: () => context.go('/teacher/profile'),
+              onTap: onProfileTap,
               borderRadius: BorderRadius.circular(24),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 20,
                 backgroundColor: Colors.white,
-                child: Icon(Icons.person, color: Colors.black54, size: 20),
+                backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
+                    ? NetworkImage(photoUrl!)
+                    : null,
+                child: (photoUrl == null || photoUrl!.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.black54, size: 20)
+                    : null,
               ),
             ),
           ),

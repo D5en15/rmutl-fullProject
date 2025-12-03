@@ -17,7 +17,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _service = RegisterService();
   final _form = GlobalKey<FormState>();
 
-  final _username = TextEditingController();
+  final _studentId = TextEditingController();
   final _fullname = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -27,7 +27,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _loading = false;
   bool _otpSent = false;
   bool _otpVerified = false;
-  bool _agree = false;
 
   /// 🔹 ส่ง OTP
   Future<void> _getOtp() async {
@@ -40,7 +39,10 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _loading = true);
     try {
       await _service.sendOtp(email);
-      setState(() => _otpSent = true);
+      setState(() {
+        _otpSent = true;
+        _otpVerified = false;
+      });
       AppToast.success(context, 'OTP has been sent to your email.');
     } catch (e) {
       AppToast.error(context, e.toString().replaceAll('Exception: ', ''));
@@ -54,7 +56,11 @@ class _RegisterPageState extends State<RegisterPage> {
     final email = _email.text.trim().toLowerCase();
     final code = _otp.text.trim();
 
-    if (code.length != 6) {
+    if (email.isEmpty) {
+      AppToast.error(context, 'Please enter your email first.');
+      return;
+    }
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       AppToast.info(context, 'Please enter a 6-digit OTP.');
       return;
     }
@@ -74,10 +80,6 @@ class _RegisterPageState extends State<RegisterPage> {
   /// 🔹 สมัครสมาชิก
   Future<void> _register() async {
     if (!(_form.currentState?.validate() ?? false)) return;
-    if (!_agree) {
-      AppToast.info(context, 'Please accept terms & conditions.');
-      return;
-    }
     if (!_otpVerified) {
       AppToast.info(context, 'Please verify your OTP first.');
       return;
@@ -86,7 +88,7 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _loading = true);
     try {
       await _service.register(
-        username: _username.text.trim(),
+        studentId: _studentId.text.trim(),
         fullname: _fullname.text.trim(),
         email: _email.text.trim().toLowerCase(),
         password: _password.text,
@@ -100,9 +102,38 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  String? _requiredValidator(String? value, String message) {
+    if (value == null || value.trim().isEmpty) return message;
+    return null;
+  }
+
+  String? _passwordValidator(String? value) {
+    final password = value ?? '';
+    if (password.isEmpty) {
+      return 'Password is required.';
+    }
+    final hasUpper = RegExp(r'[A-Z]').hasMatch(password);
+    final hasLower = RegExp(r'[a-z]').hasMatch(password);
+    final hasDigit = RegExp(r'[0-9]').hasMatch(password);
+    if (password.length < 8 || !hasUpper || !hasLower || !hasDigit) {
+      return 'Password must be at least 8 characters and contain upper, lower case letters and digits.';
+    }
+    return null;
+  }
+
+  String? _confirmPasswordValidator(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password.';
+    }
+    if (value != _password.text) {
+      return 'Passwords do not match.';
+    }
+    return null;
+  }
+
   @override
   void dispose() {
-    _username.dispose();
+    _studentId.dispose();
     _fullname.dispose();
     _email.dispose();
     _password.dispose();
@@ -137,106 +168,106 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _form,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CustomInput(controller: _username, label: "Username"),
-              const SizedBox(height: 16),
-              CustomInput(controller: _fullname, label: "Full name"),
-              const SizedBox(height: 16),
-              CustomInput(controller: _email, label: "Email"),
-              const SizedBox(height: 16),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _form,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CustomInput(
+                  controller: _studentId,
+                  label: 'Student ID',
+                  validator: (v) =>
+                      _requiredValidator(v, 'Student ID is required.'),
+                ),
+                const SizedBox(height: 16),
+                CustomInput(
+                  controller: _fullname,
+                  label: 'Full name',
+                  validator: (v) =>
+                      _requiredValidator(v, 'Full name is required.'),
+                ),
+                const SizedBox(height: 16),
+                CustomInput(
+                  controller: _email,
+                  label: 'Email',
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) =>
+                      _requiredValidator(v, 'Email is required.'),
+                ),
+                const SizedBox(height: 16),
 
-              /// 🔹 ช่อง OTP + ปุ่ม
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: CustomInput(
-                      controller: _otp,
-                      label: "OTP (6 digits)",
+                /// 🔹 ช่อง OTP + ปุ่ม
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: CustomInput(
+                        controller: _otp,
+                        label: 'OTP (6 digits)',
+                        keyboardType: TextInputType.number,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: OtpButton(
-                      text: _otpSent ? "Verify" : "Get OTP",
-                      loading: _loading,
-                      onPressed: _otpSent ? _verifyOtp : _getOtp,
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 48,
+                      child: OtpButton(
+                        text: _otpSent ? 'Verify' : 'Get OTP',
+                        loading: _loading,
+                        onPressed: _otpSent ? _verifyOtp : _getOtp,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const SizedBox(height: 16),
-              CustomInput(
-                controller: _password,
-                label: "Password",
-                obscure: true,
-              ),
-              const SizedBox(height: 16),
-              CustomInput(
-                controller: _confirm,
-                label: "Confirm Password",
-                obscure: true,
-                validator: (v) =>
-                    v != _password.text ? "Passwords do not match" : null,
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                CustomInput(
+                  controller: _password,
+                  label: 'Password',
+                  obscure: true,
+                  validator: _passwordValidator,
+                ),
+                const SizedBox(height: 16),
+                CustomInput(
+                  controller: _confirm,
+                  label: 'Confirm Password',
+                  obscure: true,
+                  validator: _confirmPasswordValidator,
+                ),
+                const SizedBox(height: 20),
 
-              /// 🔹 Terms & Conditions
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: _agree,
-                    onChanged: (v) => setState(() => _agree = v ?? false),
-                  ),
-                  const SizedBox(width: 4),
-                  const Expanded(
-                    child: Text(
-                      "By creating an account you agree to our Terms & Conditions.",
-                      style: TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+                /// 🔹 ปุ่มสมัครสมาชิก
+                CustomButton(
+                  text: 'Create Account',
+                  loading: _loading,
+                  onPressed: _register,
+                ),
 
-              /// 🔹 ปุ่มสมัครสมาชิก
-              CustomButton(
-                text: "Create Account",
-                loading: _loading,
-                onPressed: _register,
-              ),
-
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Already have an account? "),
-                  TextButton(
-                    onPressed: () => context.go('/login'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF3D5CFF),
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Already have an account? '),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF3D5CFF),
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Log in',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    child: const Text(
-                      'Log in',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

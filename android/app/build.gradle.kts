@@ -33,34 +33,28 @@ android {
     // 🔹 ลองโหลด key.properties ถ้ามี
     val keystoreProperties = Properties()
     val keystoreFile = rootProject.file("key.properties")
-    if (keystoreFile.exists()) {
+    val hasReleaseKeystore = keystoreFile.exists()
+    if (hasReleaseKeystore) {
         keystoreProperties.load(FileInputStream(keystoreFile))
     }
 
     signingConfigs {
-        create("release") {
-            if (keystoreFile.exists()) {
+        if (hasReleaseKeystore) {
+            create("release") {
                 // ✅ ใช้ key.properties จริง (ถ้ามี)
                 storeFile = file(keystoreProperties["storeFile"] ?: "")
                 storePassword = keystoreProperties["storePassword"]?.toString()
                 keyAlias = keystoreProperties["keyAlias"]?.toString()
                 keyPassword = keystoreProperties["keyPassword"]?.toString()
-            } else {
-                // ✅ ถ้าไม่มี key.properties → ใช้ debug.keystore
-                storeFile = file("${rootDir}/app/debug.keystore")
-                storePassword = "android"
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
             }
         }
     }
 
     buildTypes {
-        getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
-        }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
         }

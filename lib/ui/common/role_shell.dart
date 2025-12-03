@@ -16,20 +16,19 @@ class RoleShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ ใช้ GoRouterState.of(context).uri เพื่ออ่านเส้นทางปัจจุบัน
-    final uri = GoRouterState.of(context).uri.toString();
+    final location = GoRouterState.of(context).uri.toString();
 
     final List<_NavItem> items = switch (role) {
       'student' => const [
         _NavItem('Home', Icons.home_outlined, '/student'),
         _NavItem('Subjects', Icons.list_alt_outlined, '/student/subjects'),
         _NavItem('Community', Icons.forum_outlined, '/student/forum'),
-        _NavItem('Setting', Icons.settings_outlined, '/student/settings'),
+        _NavItem('Edit Profile', Icons.edit_outlined, '/student/settings'),
       ],
       'teacher' => const [
         _NavItem('Home', Icons.home_outlined, '/teacher'),
         _NavItem('Community', Icons.forum_outlined, '/teacher/forum'),
-        _NavItem('Setting', Icons.settings_outlined, '/teacher/settings'),
+        _NavItem('Edit Profile', Icons.edit_outlined, '/teacher/settings'),
       ],
       _ => const [
         _NavItem('Home', Icons.home_outlined, '/admin'),
@@ -39,30 +38,20 @@ class RoleShell extends StatelessWidget {
           '/admin/config/skills',
         ]),
         _NavItem('Community', Icons.forum_outlined, '/admin/forum'),
-        _NavItem('Setting', Icons.settings_outlined, '/admin/settings'),
+        _NavItem('Edit Profile', Icons.edit_outlined, '/admin/settings'),
       ],
     };
 
-    final currentIndex = _resolveIndex(uri, items);
+    final currentIndex = _resolveIndex(location, items);
 
     return Scaffold(
       body: child,
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 6, left: 8, right: 8),
-          child: switch (role) {
-            'teacher' => _FlatNavBar(
-                items: items,
-                currentIndex: currentIndex,
-                onTap: (i) => _goIfChanged(context, uri, items[i].path),
-              ),
-            _ => _PillNavBar(
-                items: items,
-                currentIndex: currentIndex,
-                onTap: (i) => _goIfChanged(context, uri, items[i].path),
-              ),
-          },
+        child: _SimpleNavBar(
+          items: items,
+          currentIndex: currentIndex,
+          onTap: (i) => _goIfChanged(context, location, items[i].path),
         ),
       ),
     );
@@ -83,13 +72,12 @@ class RoleShell extends StatelessWidget {
   }
 }
 
-/// 📦 Pill Navigation (Student + Admin)
-class _PillNavBar extends StatelessWidget {
+class _SimpleNavBar extends StatelessWidget {
   final List<_NavItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  const _PillNavBar({
+  const _SimpleNavBar({
     required this.items,
     required this.currentIndex,
     required this.onTap,
@@ -98,22 +86,21 @@ class _PillNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      width: double.infinity,
       decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.grey.shade300, width: 1)),
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-        ],
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           for (int i = 0; i < items.length; i++)
-            _PillItem(
-              item: items[i],
-              selected: i == currentIndex,
-              onTap: () => onTap(i),
+            Expanded(
+              child: _SimpleNavItem(
+                item: items[i],
+                selected: i == currentIndex,
+                onTap: () => onTap(i),
+              ),
             ),
         ],
       ),
@@ -121,12 +108,12 @@ class _PillNavBar extends StatelessWidget {
   }
 }
 
-class _PillItem extends StatelessWidget {
+class _SimpleNavItem extends StatelessWidget {
   final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
 
-  const _PillItem({
+  const _SimpleNavItem({
     required this.item,
     required this.selected,
     required this.onTap,
@@ -137,104 +124,35 @@ class _PillItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? _primary : _muted;
-    return Expanded(
+    const labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.1,
+    );
+
+    const color = _muted;
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        splashColor: _primary.withOpacity(0.2),
+        highlightColor: _primary.withOpacity(0.08),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(item.icon, color: color, size: 26),
-              const SizedBox(height: 8),
+              Icon(item.icon, size: 26, color: color),
+              const SizedBox(height: 4),
               Text(
                 item.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: labelStyle.copyWith(color: color),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 📦 Flat Navigation (Teacher)
-class _FlatNavBar extends StatelessWidget {
-  final List<_NavItem> items;
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const _FlatNavBar({
-    required this.items,
-    required this.currentIndex,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          for (int i = 0; i < items.length; i++)
-            _FlatItem(
-              item: items[i],
-              selected: i == currentIndex,
-              onTap: () => onTap(i),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FlatItem extends StatelessWidget {
-  final _NavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FlatItem({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  static const _primary = RoleShell._primary;
-  static const _muted = RoleShell._muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? _primary : _muted;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(item.icon, color: color, size: 28),
-            const SizedBox(height: 6),
-            Text(
-              item.label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
         ),
       ),
     );

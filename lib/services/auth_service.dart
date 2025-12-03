@@ -9,14 +9,25 @@ class AuthService {
     try {
       // 🟦 Check if input is email or username
       String email = input;
+      Map<String, dynamic>? userData;
       if (!input.contains('@')) {
-        final snap = await _db
+        var snap = await _db
             .collection('user')
-            .where('user_name', isEqualTo: input)
+            .where('user_id', isEqualTo: input)
             .limit(1)
             .get();
+
+        if (snap.docs.isEmpty) {
+          snap = await _db
+              .collection('user')
+              .where('user_name', isEqualTo: input)
+              .limit(1)
+              .get();
+        }
+
         if (snap.docs.isEmpty) throw AuthException('User account not found.');
-        email = snap.docs.first['user_email'];
+        userData = snap.docs.first.data();
+        email = userData['user_email'];
       }
 
       // 🟩 Firebase Auth login
@@ -29,16 +40,13 @@ class AuthService {
       if (user == null) throw AuthException('Unable to sign in.');
 
       // 🟨 Get user role from Firestore
-      final snap = await _db
-          .collection('user')
-          .where('user_email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (snap.docs.isEmpty) throw AuthException('User not found in database.');
-
-      final role = snap.docs.first['user_role'] ?? 'student';
-      return {'email': email, 'role': role};
+      userData ??= await _fetchUserByEmail(email);
+      final role = (userData['user_role'] ?? 'student').toString();
+      return {
+        'email': email,
+        'role': role,
+        'userId': userData['user_id'],
+      };
     } on FirebaseAuthException catch (e) {
       // 🟥 Handle common FirebaseAuth errors in user-friendly English
       String msg;
@@ -62,6 +70,48 @@ class AuthService {
     } catch (_) {
       throw AuthException('Incorrect information. Please try again.');
     }
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUserWithRole() async {
+    try {
+      final current = _auth.currentUser;
+      if (current == null) return null;
+
+      Map<String, dynamic>? data;
+      final doc = await _db.collection('user').doc(current.uid).get();
+      if (doc.exists) {
+        data = doc.data();
+      } else if (current.email != null) {
+        final snap = await _db
+            .collection('user')
+            .where('user_email', isEqualTo: current.email)
+            .limit(1)
+            .get();
+        if (snap.docs.isNotEmpty) data = snap.docs.first.data();
+      }
+
+      if (data == null) return null;
+      return {
+        'email': data['user_email'] ?? current.email,
+        'role': (data['user_role'] ?? 'student').toString(),
+        'userId': data['user_id'],
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchUserByEmail(String email) async {
+    final snap = await _db
+        .collection('user')
+        .where('user_email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isEmpty) {
+      throw AuthException('User not found in database.');
+    }
+    return snap.docs.first.data();
   }
 }
 

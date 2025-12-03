@@ -1,16 +1,21 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 
 class RegisterService {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
-  final _functions = FirebaseFunctions.instanceFor(
-    region: 'us-central1',
-  ); // ✅ ให้ตรง region
+  static const _otpEndpoint =
+      'https://us-central1-rmutl-fullproject.cloudfunctions.net/sendOtpEmail';
+
+  String _generateOtp() {
+    final random = Random.secure();
+    final value = 100000 + random.nextInt(900000);
+    return value.toString();
+  }
 
   /// ✅ ส่ง OTP ผ่าน Firebase Cloud Function
   Future<void> sendOtp(String email) async {
@@ -28,7 +33,7 @@ class RegisterService {
       throw Exception('This email is already in use.');
 
     // 🔹 สร้างรหัส OTP 6 หลัก
-    final code = List.generate(6, (_) => Random.secure().nextInt(10)).join();
+    final code = _generateOtp();
 
     // 🔹 บันทึกลง Firestore
     final now = Timestamp.now();
@@ -41,24 +46,24 @@ class RegisterService {
       'otp_expire': expires,
     });
     try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.debug,
-        appleProvider: AppleProvider.debug,
+      final response = await http.post(
+        Uri.parse(_otpEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code}),
       );
 
-      print('Sending email: $email, code: $code');
-      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-
-      final result = await functions.httpsCallable('sendOtpEmail').call({
-        'email': email,
-        'code': code,
-      });
-
-      print('✅ Result: ${result.data}');
-    } on FirebaseFunctionsException catch (e) {
-      print('❌ Error: ${e.message}');
+      if (response.statusCode != 200) {
+        String message = 'Failed to send OTP.';
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map && body['error'] is String) {
+            message = body['error'] as String;
+          }
+        } catch (_) {}
+        throw Exception(message);
+      }
     } catch (e) {
-      print('❌ Unexpected: $e');
+      throw Exception('Failed to send OTP: $e');
     }
   }
 
@@ -77,11 +82,12 @@ class RegisterService {
     if (otp != code) {
       throw Exception('Invalid OTP code.');
     }
+
   }
 
   /// ✅ ลงทะเบียนผู้ใช้ใหม่
   Future<void> register({
-    required String username,
+    required String studentId,
     required String fullname,
     required String email,
     required String password,
@@ -96,8 +102,8 @@ class RegisterService {
 
       // บันทึกข้อมูลใน Firestore
       final newUser = UserModel(
-        userId: uid,
-        userName: username,
+        userId: studentId,
+        userName: studentId,
         fullName: fullname,
         email: email,
         role: 'Student',

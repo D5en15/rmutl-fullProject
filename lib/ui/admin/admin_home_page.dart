@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -10,11 +11,11 @@ class AdminHomePage extends StatefulWidget {
 }
 
 class _AdminHomePageState extends State<AdminHomePage> {
-  String? _adminName;
   int _total = 0;
   int _students = 0;
   int _teachers = 0;
   int _admins = 0;
+  String? _avatarUrl;
 
   String _selectedRole = 'เลือกบทบาท'; // ค่า default
 
@@ -28,6 +29,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
     // ✅ ใช้ collection 'user' (ไม่มี s)
     final snap = await FirebaseFirestore.instance.collection('user').get();
     int students = 0, teachers = 0, admins = 0;
+    String? avatarUrl;
+    final currentEmail =
+        FirebaseAuth.instance.currentUser?.email?.toLowerCase();
 
     for (var doc in snap.docs) {
       final data = doc.data();
@@ -37,12 +41,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (role == 'teacher') teachers++;
       if (role == 'admin') admins++;
 
-      // ✅ ดึงชื่อแอดมินคนแรก
-      if (role == 'admin' && _adminName == null) {
-        _adminName = data['user_fullname'] ??
-            data['user_name'] ??
-            data['user_email'] ??
-            'Admin';
+      final email = (data['user_email'] ?? '').toString().toLowerCase();
+      if (currentEmail != null && email == currentEmail) {
+        avatarUrl = (data['user_img'] as String?)?.trim();
       }
     }
 
@@ -51,6 +52,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       _teachers = teachers;
       _admins = admins;
       _total = students + teachers + admins;
+      _avatarUrl = avatarUrl;
     });
   }
 
@@ -63,7 +65,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              _BlueHeader(adminName: _adminName ?? 'Admin'),
+              _BlueHeader(
+                roleLabel: 'Administrator',
+                subtitle:
+                    'Configure the platform and keep every workflow aligned.',
+                photoUrl: _avatarUrl,
+                onProfileTap: () => context.go(
+                  '/profile/edit',
+                  extra: const {'role': 'admin'},
+                ),
+              ),
               _Body(
                 total: _total,
                 students: _students,
@@ -93,8 +104,16 @@ class _T {
 
 /// ---------- BLUE HEADER ----------
 class _BlueHeader extends StatelessWidget {
-  const _BlueHeader({required this.adminName});
-  final String adminName;
+  const _BlueHeader({
+    required this.roleLabel,
+    required this.subtitle,
+    required this.photoUrl,
+    required this.onProfileTap,
+  });
+  final String roleLabel;
+  final String subtitle;
+  final String? photoUrl;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +128,7 @@ class _BlueHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Hi, $adminName',
+                roleLabel,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,
@@ -118,8 +137,8 @@ class _BlueHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text("Let's start managing",
-                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Text(subtitle,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
             ],
           ),
           Align(
@@ -137,12 +156,17 @@ class _BlueHeader extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: InkWell(
-              onTap: () => context.go('/admin/profile'),
+              onTap: onProfileTap,
               borderRadius: BorderRadius.circular(24),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 20,
                 backgroundColor: Colors.white,
-                child: Icon(Icons.person, color: Colors.black54, size: 20),
+                backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
+                    ? NetworkImage(photoUrl!)
+                    : null,
+                child: (photoUrl == null || photoUrl!.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.black54, size: 20)
+                    : null,
               ),
             ),
           ),

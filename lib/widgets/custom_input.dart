@@ -24,6 +24,13 @@ class CustomInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(12);
+    OutlineInputBorder buildBorder(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: borderRadius,
+          borderSide: BorderSide(color: color, width: width),
+        );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -47,12 +54,11 @@ class CustomInput extends StatelessWidget {
           validator: validator,
           onFieldSubmitted: (_) => onSubmitted?.call(),
           decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF3D5CFF), width: 1.5),
-            ),
+            border: buildBorder(const Color(0xFFE0E0E0)),
+            enabledBorder: buildBorder(const Color(0xFFE0E0E0)),
+            focusedBorder: buildBorder(const Color(0xFF3D5CFF), 1.5),
+            errorBorder: buildBorder(Colors.red.shade400),
+            focusedErrorBorder: buildBorder(Colors.red.shade400, 1.5),
             contentPadding:
                 const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
             suffixIcon: suffixIcon,
