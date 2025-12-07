@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to let you choose a profile picture.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We save the cropped profile picture back to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is required only if you take a new profile photo.</string>
 </dict>
 </plist>

@@ -144,7 +144,7 @@ class _BlueHeader extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: InkWell(
-              onTap: () => context.go('/admin/notifications'),
+              onTap: () => context.go('/admin/messages?tab=notifications'),
               borderRadius: BorderRadius.circular(24),
               child: const Padding(
                 padding: EdgeInsets.all(6),

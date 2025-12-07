@@ -3,8 +3,18 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+enum InboxTab { notifications, messages }
+
+const _inboxPrimary = Color(0xFF3D5CFF);
+const _inboxMuted = Color(0xFF858597);
+
 class MessagesPage extends StatefulWidget {
-  const MessagesPage({super.key});
+  const MessagesPage({
+    super.key,
+    this.initialTab = InboxTab.messages,
+  });
+
+  final InboxTab initialTab;
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -12,9 +22,8 @@ class MessagesPage extends StatefulWidget {
 
 class _MessagesPageState extends State<MessagesPage> {
   final _searchCtrl = TextEditingController();
-
-  static const _primary = Color(0xFF3D5CFF);
-  static const _muted = Color(0xFF858597);
+  InboxTab _currentTab = InboxTab.messages;
+  bool _tabSynced = false;
 
   String _detectRole(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
@@ -32,6 +41,30 @@ class _MessagesPageState extends State<MessagesPage> {
   String _chatId(String id1, String id2) {
     final sorted = [id1, id2]..sort();
     return sorted.join('_');
+  }
+
+  void _syncTabFromUri() {
+    if (_tabSynced) return;
+    final tabParam = GoRouterState.of(context).uri.queryParameters['tab'];
+    final initial = tabParam == 'notifications'
+        ? InboxTab.notifications
+        : widget.initialTab;
+    _currentTab = initial;
+    _tabSynced = true;
+  }
+
+  void _setTab(InboxTab tab) {
+    if (_currentTab == tab) return;
+    setState(() {
+      _currentTab = tab;
+      _searchCtrl.clear();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTabFromUri();
   }
 
   @override
@@ -52,6 +85,9 @@ class _MessagesPageState extends State<MessagesPage> {
       );
     }
 
+    final title =
+        _currentTab == InboxTab.messages ? 'Messages' : 'Notifications';
+
     return WillPopScope(
       onWillPop: () async {
         context.go(base);
@@ -67,8 +103,8 @@ class _MessagesPageState extends State<MessagesPage> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             onPressed: () => context.go(base),
           ),
-          title: const Text("Messages",
-              style: TextStyle(fontWeight: FontWeight.w800)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
         ),
         body: Column(
           children: [
@@ -78,43 +114,57 @@ class _MessagesPageState extends State<MessagesPage> {
                 Expanded(
                   child: _TabButton(
                     text: 'notification',
-                    isActive: false,
-                    onTap: () => context.go('$base/notifications'),
+                    isActive: _currentTab == InboxTab.notifications,
+                    onTap: () => _setTab(InboxTab.notifications),
                   ),
                 ),
                 Expanded(
                   child: _TabButton(
                     text: 'message',
-                    isActive: true,
-                    onTap: () {},
+                    isActive: _currentTab == InboxTab.messages,
+                    onTap: () => _setTab(InboxTab.messages),
                   ),
                 ),
               ],
             ),
 
             // 🔍 ช่องค้นหา
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: TextField(
-                controller: _searchCtrl,
-                decoration: InputDecoration(
-                  hintText: 'ค้นหาผู้ใช้...',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF5F6FA),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+            if (_currentTab == InboxTab.messages)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'ค้นหาผู้ใช้...',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F6FA),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
+                  onChanged: (_) => setState(() {}),
                 ),
-                onChanged: (_) => setState(() {}),
               ),
-            ),
 
             Expanded(
-              child: _searchCtrl.text.trim().isEmpty
-                  ? _RecentChatsList(currentEmail: user.email!)
-                  : _SearchUserList(searchText: _searchCtrl.text.trim()),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _currentTab == InboxTab.messages
+                    ? (_searchCtrl.text.trim().isEmpty
+                        ? _RecentChatsList(
+                            key: const ValueKey('recent_chats'),
+                            currentEmail: user.email!,
+                          )
+                        : _SearchUserList(
+                            key: const ValueKey('search_users'),
+                            searchText: _searchCtrl.text.trim(),
+                          ))
+                    : const _NotificationContent(
+                        key: ValueKey('notification_tab'),
+                      ),
+              ),
             ),
           ],
         ),
@@ -128,7 +178,7 @@ class _MessagesPageState extends State<MessagesPage> {
 //
 class _RecentChatsList extends StatelessWidget {
   final String currentEmail;
-  const _RecentChatsList({required this.currentEmail});
+  const _RecentChatsList({super.key, required this.currentEmail});
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +333,7 @@ class _RecentChatsList extends StatelessWidget {
 //
 class _SearchUserList extends StatelessWidget {
   final String searchText;
-  const _SearchUserList({required this.searchText});
+  const _SearchUserList({super.key, required this.searchText});
 
   String _chatId(String id1, String id2) {
     final sorted = [id1, id2]..sort();
@@ -369,6 +419,32 @@ class _SearchUserList extends StatelessWidget {
   }
 }
 
+class _NotificationContent extends StatelessWidget {
+  const _NotificationContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.notifications_none_rounded,
+              size: 80, color: _inboxMuted),
+          SizedBox(height: 12),
+          Text(
+            "ไม่มีการแจ้งเตือน",
+            style: TextStyle(
+              color: _inboxMuted,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 //
 // ✅ ปุ่ม Tab บนสุด
 //
@@ -383,12 +459,9 @@ class _TabButton extends StatelessWidget {
   final bool isActive;
   final VoidCallback? onTap;
 
-  static const _primary = Color(0xFF3D5CFF);
-  static const _muted = Color(0xFF858597);
-
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? Colors.black87 : _muted;
+    final color = isActive ? Colors.black87 : _inboxMuted;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -407,7 +480,7 @@ class _TabButton extends StatelessWidget {
               height: 3,
               width: isActive ? 90 : 0,
               decoration: BoxDecoration(
-                color: _primary,
+                color: _inboxPrimary,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),

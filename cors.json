@@ -1,7 +1,8 @@
 [
   {
-    "origin": ["*"],
+    "origin": ["*","http://localhost:33145","http://127.0.0.1:33145","https://rmutl-fullproject.web.app","https://rmutl-fullproject.firebaseapp.com"],
     "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Authorization"],
     "maxAgeSeconds": 3600
   }
 ]

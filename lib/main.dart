@@ -5,10 +5,26 @@ import 'app_router.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await _initFirebaseSafely();
   runApp(const MyApp());
+}
+
+Future<void> _initFirebaseSafely() async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      Firebase.app();
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') {
+      rethrow;
+    }
+    // ถ้ามี app อยู่แล้วให้ใช้ตัวเดิม
+    Firebase.app();
+  }
 }
 
 class MyApp extends StatelessWidget {

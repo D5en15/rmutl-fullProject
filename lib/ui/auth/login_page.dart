@@ -37,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
     final pass = passCtrl.text.trim();
 
     if (input.isEmpty || pass.isEmpty) {
-      AppToast.info(context, "Please enter your email/username and password.");
+      AppToast.info(context, "Please enter your email/ID and password.");
       return;
     }
 
@@ -102,7 +102,7 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomInput(controller: emailCtrl, label: "Email or Student ID"),
+            CustomInput(controller: emailCtrl, label: "Email or ID"),
             const SizedBox(height: 20),
             CustomInput(
               controller: passCtrl,

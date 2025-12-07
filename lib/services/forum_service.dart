@@ -68,12 +68,22 @@ class ForumService {
 
   /// ✅ อัปโหลดรูปภาพ (รองรับเว็บ)
   Future<String?> uploadPostImage(Uint8List bytes, String postId) async {
-    try {
-      final ref = _storage.ref().child('post_images/$postId.jpg');
+    if (bytes.isEmpty) {
+      throw Exception('Image is empty.');
+    }
+
+    Future<String> _upload(String path) async {
+      final ref = _storage.ref().child(path);
       await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-      return await ref.getDownloadURL();
-    } catch (e) {
-      rethrow;
+      return ref.getDownloadURL();
+    }
+
+    try {
+      return await _upload('post_images/$postId.jpg');
+    } catch (_) {
+      // Fallback: unique name to avoid any stale reference issues
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      return await _upload('post_images/${postId}_$ts.jpg');
     }
   }
 

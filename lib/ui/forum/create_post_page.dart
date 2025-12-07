@@ -1,8 +1,10 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show Uint8List;
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../services/forum_service.dart';
@@ -36,22 +38,37 @@ class _CreatePostPageState extends State<CreatePostPage> {
   /// ✅ โหลดข้อมูลผู้ใช้จาก Firestore
   Future<void> _loadUser() async {
     final user = FirebaseAuth.instance.currentUser;
+    final fallbackUid = user?.uid;
     if (user == null) return;
 
-    final snap = await _service.db
-        .collection('user')
-        .where('user_email', isEqualTo: user.email)
-        .limit(1)
-        .get();
+    try {
+      final snap = await _service.db
+          .collection('user')
+          .where('user_email', isEqualTo: user.email)
+          .limit(1)
+          .get();
 
-    if (snap.docs.isEmpty) return;
-    final data = snap.docs.first.data();
+      if (snap.docs.isNotEmpty) {
+        final data = snap.docs.first.data();
+        setState(() {
+          _fullname = data['user_fullname'] ?? user.email ?? 'Unknown';
+          _avatar = data['user_img'];
+          _userId = data['user_id'].toString();
+        });
+        return;
+      }
+    } catch (_) {
+      // ignore lookup issues and fallback below
+    }
 
-    setState(() {
-      _fullname = data['user_fullname'] ?? user.email ?? 'Unknown';
-      _avatar = data['user_img'];
-      _userId = data['user_id'].toString();
-    });
+    // Fallback to auth uid if user doc not found
+    if (fallbackUid != null) {
+      setState(() {
+        _fullname = user.email ?? 'Unknown';
+        _avatar = null;
+        _userId = fallbackUid;
+      });
+    }
   }
 
   /// ✅ เลือกรูปภาพ (รองรับเว็บ)
@@ -62,7 +79,23 @@ class _CreatePostPageState extends State<CreatePostPage> {
         withData: true,
       );
       if (result != null && result.files.isNotEmpty) {
-        setState(() => _webImage = result.files.first.bytes);
+        final file = result.files.first;
+        Uint8List? bytes = file.bytes;
+        if (bytes == null && !kIsWeb && file.path != null) {
+          try {
+            bytes = await File(file.path!).readAsBytes();
+          } catch (_) {
+            bytes = null;
+          }
+        }
+        if (bytes != null) {
+          setState(() => _webImage = bytes);
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read image file.')),
+          );
+        }
       }
     } catch (e) {
       debugPrint('❌ Error selecting image: $e');
@@ -107,8 +140,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
           const SizedBox(width: 4),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -151,29 +184,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
             const SizedBox(height: 8),
 
             // ✏️ Content field
-            Expanded(
-              child: TextField(
-                controller: _contentCtrl,
-                maxLines: null,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: 'Write something…',
-                  border: InputBorder.none,
-                ),
+            TextField(
+              controller: _contentCtrl,
+              maxLines: null,
+              minLines: 4,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                hintText: 'Write something…',
+                border: InputBorder.none,
               ),
             ),
+            const SizedBox(height: 4),
 
             // 🖼 Preview รูปภาพ
             if (_webImage != null) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      _webImage!,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
+                    child: GestureDetector(
+                      onTap: () => _showImagePreview(_webImage!),
+                      child: AspectRatio(
+                        aspectRatio: 3 / 4,
+                        child: Image.memory(
+                          _webImage!,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
                   Positioned(
@@ -192,17 +230,26 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 ],
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
-            // 📸 ปุ่มเพิ่มรูปภาพ
-            Row(
-              children: [
-                IconButton(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.image_outlined),
-                  tooltip: 'Add image',
-                ),
-              ],
+            // 📸 ปุ่มเพิ่มรูปภาพ (ชิดซ้ายด้านล่าง)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.image_outlined),
+                    tooltip: 'Add image',
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Add image",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -215,9 +262,56 @@ class _CreatePostPageState extends State<CreatePostPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || _userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อนโพสต์')),
+        const SnackBar(content: Text('Please sign in before posting')),
       );
       return;
+    }
+
+    // One post per day per user
+    DateTime? lastTime;
+    try {
+      final latest = await _service.db
+          .collection('post')
+          .where('user_id', isEqualTo: _userId)
+          .orderBy('post_time', descending: true)
+          .limit(1)
+          .get();
+      if (latest.docs.isNotEmpty) {
+        lastTime =
+            (latest.docs.first.data()['post_time'] as Timestamp?)?.toDate();
+      }
+    } catch (_) {
+      // Fallback without orderBy (no index required)
+      final fallback = await _service.db
+          .collection('post')
+          .where('user_id', isEqualTo: _userId)
+          .get();
+      for (final d in fallback.docs) {
+        final t = (d.data()['post_time'] as Timestamp?)?.toDate();
+        if (t != null && (lastTime == null || t.isAfter(lastTime!))) {
+          lastTime = t;
+        }
+      }
+    }
+
+    if (lastTime != null) {
+      final now = DateTime.now();
+      final nextAllowed = lastTime.add(const Duration(days: 1));
+      final remaining = nextAllowed.difference(now);
+      if (remaining > Duration.zero) {
+        final hours = remaining.inHours;
+        final minutes = remaining.inMinutes.remainder(60);
+        final countdown = hours > 0
+            ? "${hours}h ${minutes.toString().padLeft(2, '0')}m"
+            : "${minutes}m";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'You can post again in $countdown. Please wait 24 hours between posts.'),
+          ),
+        );
+        return;
+      }
     }
 
     setState(() => _loading = true);
@@ -235,17 +329,58 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('โพสต์สำเร็จ!')),
+        const SnackBar(content: Text('Post created successfully')),
       );
       context.pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _showImagePreview(Uint8List bytes) {
+    if (bytes.isEmpty) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      barrierDismissible: true,
+      builder: (dialogCtx) => Stack(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(dialogCtx).pop(),
+            child: Container(
+              color: Colors.black,
+              alignment: Alignment.center,
+              child: InteractiveViewer(
+                child: Image.memory(bytes),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 30,
+            right: 20,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: IconButton(
+                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                icon: const Icon(Icons.close, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

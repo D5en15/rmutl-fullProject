@@ -1,10 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -36,59 +36,75 @@ class EditProfileService {
     return data;
   }
 
-  /// ✅ Upload + Crop รูปก่อนบันทึก
+  /// ✅ Upload avatar (mobile/web safe – no crash from camera permissions)
   Future<String?> pickAndUploadAvatar(BuildContext context) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('No logged-in user.');
 
-    XFile? picked;
+    File? file;
+    Uint8List? bytes;
+
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null) return null;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      compressFormat: ImageCompressFormat.jpg,
+      aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Photo',
+          toolbarColor: const Color(0xFF1E63E9),
+          toolbarWidgetColor: Colors.white,
+          activeControlsWidgetColor: const Color(0xFF1E63E9),
+          hideBottomControls: true,
+          lockAspectRatio: true,
+        ),
+        IOSUiSettings(
+          title: 'Crop Photo',
+          aspectRatioLockEnabled: true,
+        ),
+        if (kIsWeb)
+          WebUiSettings(
+            context: context,
+            presentStyle: WebPresentStyle.dialog,
+            size: const CropperSize(width: 420, height: 420),
+            dragMode: WebDragMode.crop,
+            viewwMode: WebViewMode.mode_1,
+          ),
+      ],
+    );
+    if (cropped == null) return null;
 
     if (kIsWeb) {
-      // 🌐 Web — ใช้ file_picker
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
-      if (result == null || result.files.single.bytes == null) return null;
-
-      // ✅ Upload ตรงไปยัง Storage
-      final storageRef = _storage.ref().child('avatars/${user.uid}.jpg');
-      await storageRef.putData(
-        result.files.single.bytes!,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final url = await storageRef.getDownloadURL();
-      await _updateUserImage(url);
-      return url;
+      bytes = await cropped.readAsBytes();
     } else {
-      // 📱 Mobile/Desktop
-      picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (picked == null) return null;
-
-      // ✂️ Crop 1:1 ก่อนอัปโหลด
-      final cropped = await ImageCropper().cropImage(
-        sourcePath: picked.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Profile Image',
-            toolbarColor: Colors.blue,
-            toolbarWidgetColor: Colors.white,
-            lockAspectRatio: true,
-          ),
-          IOSUiSettings(title: 'Crop Profile Image'),
-        ],
-      );
-
-      if (cropped == null) return null;
-
-      // ✅ Upload หลัง crop เสร็จ
-      final storageRef = _storage.ref().child('avatars/${user.uid}.jpg');
-      await storageRef.putFile(File(cropped.path));
-      final url = await storageRef.getDownloadURL();
-      await _updateUserImage(url);
-      return url;
+      file = File(cropped.path);
     }
+
+    if (file == null && (bytes == null || bytes.isEmpty)) return null;
+
+    final storageRef = _storage.ref().child('avatars/${user.uid}.jpg');
+    final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+    try {
+      if (file != null) {
+        await storageRef.putFile(file, metadata);
+      } else if (bytes != null) {
+        await storageRef.putData(bytes, metadata);
+      }
+    } on FirebaseException catch (e) {
+      debugPrint("Upload failed: $e");
+      rethrow;
+    }
+
+    final url = await storageRef.getDownloadURL();
+    await _updateUserImage(url);
+    return url;
   }
 
   /// ✅ บันทึก URL ลง Firestore

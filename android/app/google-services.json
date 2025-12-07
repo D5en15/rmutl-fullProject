@@ -3,7 +3,7 @@
     "project_number": "576400581098",
     "firebase_url": "https://rmutl-fullproject-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "rmutl-fullproject",
-    "storage_bucket": "rmutl-fullproject.appspot.app"
+    "storage_bucket": "rmutl-fullproject.firebasestorage.app"
   },
   "client": [
     {

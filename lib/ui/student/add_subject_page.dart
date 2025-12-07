@@ -23,14 +23,14 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
   String? _userId; // จากตาราง user
 
   final _semesters = const [
-    "ปี 1 เทอม 1",
-    "ปี 1 เทอม 2",
-    "ปี 2 เทอม 1",
-    "ปี 2 เทอม 2",
-    "ปี 3 เทอม 1",
-    "ปี 3 เทอม 2",
-    "ปี 4 เทอม 1",
-    "ปี 4 เทอม 2",
+    "Year 1 Term 1",
+    "Year 1 Term 2",
+    "Year 2 Term 1",
+    "Year 2 Term 2",
+    "Year 3 Term 1",
+    "Year 3 Term 2",
+    "Year 4 Term 1",
+    "Year 4 Term 2",
   ];
 
   final _grades = const [
@@ -46,17 +46,29 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
 
   Future<void> _loadUserId() async {
     final email = FirebaseAuth.instance.currentUser?.email;
-    if (email == null) return;
+    final fallbackUid = FirebaseAuth.instance.currentUser?.uid;
+    if (email == null && fallbackUid == null) return;
 
-    final snap = await FirebaseFirestore.instance
-        .collection("user")
-        .where("user_email", isEqualTo: email)
-        .limit(1)
-        .get();
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection("user")
+          .where("user_email", isEqualTo: email)
+          .limit(1)
+          .get();
 
-    if (snap.docs.isNotEmpty) {
+      if (snap.docs.isNotEmpty) {
+        setState(() {
+          _userId = snap.docs.first.data()["user_id"].toString();
+        });
+        return;
+      }
+    } catch (_) {
+      // ignore lookup errors and fallback to auth uid
+    }
+
+    if (fallbackUid != null) {
       setState(() {
-        _userId = snap.docs.first.data()["user_id"].toString();
+        _userId = fallbackUid;
       });
     }
   }
@@ -84,7 +96,23 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_subjectId == null || _semester == null || _grade == null || _userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณากรอกข้อมูลให้ครบ')),
+        const SnackBar(content: Text('Please complete all fields')),
+      );
+      return;
+    }
+
+    final duplicateSubject = await FirebaseFirestore.instance
+        .collection('enrollment')
+        .where('user_id', isEqualTo: _userId)
+        .where('subject_id', isEqualTo: _subjectId)
+        .limit(1)
+        .get();
+    if (duplicateSubject.docs.isNotEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You already added ${_subjectId ?? "this subject"}.'),
+        ),
       );
       return;
     }
@@ -100,7 +128,7 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('✅ เพิ่มรายวิชาเรียบร้อย')),
+      const SnackBar(content: Text('Subject added successfully')),
     );
     context.pop();
   }
@@ -124,11 +152,12 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('เพิ่มรายวิชา'),
-        backgroundColor: const Color(0xFFF1F2F6),
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
+        title: const Text('Add Subject'),
       ),
       body: _userId == null
           ? const Center(child: CircularProgressIndicator())
@@ -139,22 +168,21 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _label('เลือกรายวิชา'),
+                    _label('Select Subject'),
                     DropdownSearch<Map<String, dynamic>>(
                       asyncItems: (filter) => _fetchSubjects(filter),
                       itemAsString: (item) =>
                           "${item['subject_id']} • ${item['subject_thname']} (${item['subject_enname']})",
                       onChanged: (v) => setState(() => _subjectId = v?['subject_id']),
-                      validator: (v) => v == null ? 'กรุณาเลือกรายวิชา' : null,
+                      validator: (v) => v == null ? 'Please select a subject' : null,
                       dropdownDecoratorProps: DropDownDecoratorProps(
-                        dropdownSearchDecoration:
-                            _boxDeco().copyWith(hintText: "พิมพ์ค้นหารายวิชา..."),
+                        dropdownSearchDecoration: _boxDeco(),
                       ),
                       popupProps: const PopupProps.dialog(
                         showSearchBox: true,
                         searchFieldProps: TextFieldProps(
                           decoration: InputDecoration(
-                            hintText: "ค้นหารายวิชา...",
+                            hintText: "Search subject...",
                             contentPadding: EdgeInsets.all(12),
                           ),
                         ),
@@ -162,7 +190,7 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    _label('เลือกเทอม'),
+                    _label('Select Term'),
                     DropdownButtonFormField<String>(
                       value: _semester,
                       decoration: _boxDeco(),
@@ -170,17 +198,17 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
                           .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                           .toList(),
                       onChanged: (v) => setState(() => _semester = v),
-                      validator: (v) => v == null ? 'กรุณาเลือกเทอม' : null,
+                      validator: (v) => v == null ? 'Please select a term' : null,
                     ),
                     const SizedBox(height: 16),
 
-                    _label('เลือกเกรด'),
+                    _label('Select Grade'),
                     DropdownButtonFormField<String>(
                       value: _grade,
                       decoration: _boxDeco(),
                       items: _grades.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                       onChanged: (v) => setState(() => _grade = v),
-                      validator: (v) => v == null ? 'กรุณาเลือกเกรด' : null,
+                      validator: (v) => v == null ? 'Please select a grade' : null,
                     ),
                     const SizedBox(height: 24),
 
@@ -194,7 +222,7 @@ class _AddSubjectPageState extends State<AddSubjectPage> {
                           ),
                         ),
                         onPressed: _submit,
-                        child: const Text('เพิ่มรายวิชา'),
+                        child: const Text('Add Subject'),
                       ),
                     ),
                   ],

@@ -1,7 +1,7 @@
 // lib/ui/common/edit_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart'; // <- ไม่ได้ใช้ เลยลบออกได้
 import '../../models/edit_profile_initial.dart';
 import '../../services/edit_profile_service.dart';
 import '../../widgets/custom_input.dart';
@@ -34,17 +34,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   String? _classValue;
   String? _avatarUrl;
+  bool _pickingAvatar = false;
   bool _loading = false;
-  bool _loadingClasses = true;
   String? _docId;
 
-  List<String> _classes = [];
+  String? _computedYearValue;
+  String? _computedYearLabel;
 
   @override
   void initState() {
     super.initState();
+    _studentId.addListener(_handleStudentIdChange);
     _loadUserData();
-    _loadClassrooms(); // ✅ โหลดห้องเรียนจาก Firestore
+  }
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _fullname.dispose();
+    _email.dispose();
+    _studentId.removeListener(_handleStudentIdChange);
+    _studentId.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -61,6 +72,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _classValue = data['user_class'];
         _avatarUrl = data['user_img'];
         _docId = data['id'] ?? data['docId'];
+        _updateYearFromId();
       });
     } catch (e) {
       AppToast.error(context, 'Failed to load profile: $e');
@@ -69,50 +81,42 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  /// ✅ โหลดรายชื่อห้องเรียนจาก Firestore (ดึงเฉพาะชื่อห้อง)
-  Future<void> _loadClassrooms() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('classroom')
-          .orderBy('room_name')
-          .get();
-      final rooms = snap.docs
-          .map((d) => (d.data()['room_name'] ?? '').toString())
-          .where((name) => name.isNotEmpty)
-          .toList();
-
-      setState(() {
-        _classes = rooms;
-        _loadingClasses = false;
-      });
-    } catch (e) {
-      debugPrint("⚠️ Error loading classrooms: $e");
-      setState(() => _loadingClasses = false);
-    }
-  }
-
   Future<void> _pickAvatar(BuildContext context) async {
+    if (_pickingAvatar) return;
+    setState(() => _pickingAvatar = true);
     try {
       final url = await _service.pickAndUploadAvatar(context);
-      if (url == null) return;
-      setState(() => _avatarUrl = url);
-      AppToast.success(context, "Profile picture updated successfully!");
+      if (url != null) {
+        setState(() => _avatarUrl = url);
+        AppToast.success(context, "Profile picture updated successfully!");
+      }
     } catch (e) {
       AppToast.error(context, "Upload failed: $e");
+    } finally {
+      if (mounted) setState(() => _pickingAvatar = false);
     }
   }
 
   Future<void> _saveProfile() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_docId == null) return AppToast.error(context, "Missing user document.");
+    if (_docId == null) {
+      AppToast.error(context, "Missing user document.");
+      return;
+    }
 
-    final data = {
-      'user_name': _username.text.trim(),
+    final isStudent = widget.role.toLowerCase() == 'student';
+
+    final data = <String, dynamic>{
       'user_fullname': _fullname.text.trim(),
-      'user_code': _studentId.text.trim(),
-      'user_class': _classValue,
+      'user_class': isStudent ? _computedYearValue : _classValue,
       'user_img': _avatarUrl,
     };
+
+    if (isStudent) {
+      data['user_code'] = _studentId.text.trim();
+    } else {
+      data['user_name'] = _username.text.trim();
+    }
 
     try {
       await _service.updateProfile(_docId!, data);
@@ -123,173 +127,144 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
+  void _handleStudentIdChange() {
+    _updateYearFromId();
+  }
+
+  void _updateYearFromId() {
+    if (widget.role.toLowerCase() != 'student') return;
+    final id = _studentId.text.trim();
+    if (id.length >= 2) {
+      final prefix = id.substring(0, 2);
+      setState(() {
+        _computedYearValue = prefix;
+        _computedYearLabel = "Year $prefix";
+      });
+    } else {
+      setState(() {
+        _computedYearValue = null;
+        _computedYearLabel = null;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isStudent = widget.role.toLowerCase() == 'student';
+    final statusBar = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // 🔹 พื้นหลังสีน้ำเงิน
-          Container(
-            height: 130,
-            width: double.infinity,
-            color: const Color(0xFF1E63E9),
-          ),
-
-          // 🔹 เนื้อหาหลักทั้งหมด
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 70),
-
-                  // ✅ รูปโปรไฟล์ + ปุ่มแก้ไข
-                  Stack(
-                    alignment: Alignment.bottomRight,
+      body: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildHeroSection(statusBar),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: () => _pickAvatar(context),
-                        child: AvatarWidget(
-                          imageUrl: _avatarUrl,
-                          radius: 55,
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 2,
-                        right: 2,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.edit,
-                                size: 20, color: Colors.blueAccent),
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(),
-                            onPressed: () => _pickAvatar(context),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // 🔹 ฟอร์มโปรไฟล์
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        CustomInput(controller: _username, label: "Username"),
-                        const SizedBox(height: 16),
-                        CustomInput(controller: _fullname, label: "Full Name"),
-                        const SizedBox(height: 16),
+                      if (!isStudent) ...[
                         CustomInput(
-                          controller: _email,
-                          label: "Email",
-                          readOnly: true,
+                          controller: _username,
+                          label: "Username",
                         ),
                         const SizedBox(height: 16),
-
-                        if (isStudent) ...[
-                          CustomInput(
-                              controller: _studentId, label: "Student ID"),
-                          const SizedBox(height: 16),
-
-                          // 🔹 Label Class ด้านนอก
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              "Class",
+                      ],
+                      CustomInput(
+                        controller: _fullname,
+                        label: "Full Name",
+                      ),
+                      const SizedBox(height: 16),
+                      CustomInput(
+                        controller: _email,
+                        label: "Email",
+                        readOnly: true,
+                      ),
+                      const SizedBox(height: 16),
+                      if (isStudent) ...[
+                        CustomInput(
+                          controller: _studentId,
+                          label: "Student ID",
+                        ),
+                        const SizedBox(height: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Class year",
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                                 color: Colors.black87,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          // 🔹 Dropdown ดึงจาก Firestore
-                          Container(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Colors.black54,
-                                width: 1.3,
+                            const SizedBox(height: 6),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 16,
                               ),
-                              borderRadius:
-                                  const BorderRadius.all(Radius.circular(12)),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE0E0E0),
+                                ),
+                              ),
+                              child: Text(
+                                _computedYearLabel ?? "Enter ID to detect.",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: _computedYearLabel != null
+                                      ? Colors.black87
+                                      : Colors.grey,
+                                ),
+                              ),
                             ),
-                            child: DropdownButtonHideUnderline(
-                              child: _loadingClasses
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Row(
-                                        children: [
-                                          SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2)),
-                                          SizedBox(width: 10),
-                                          Text("Loading classrooms..."),
-                                        ],
-                                      ),
-                                    )
-                                  : Builder(
-                                      builder: (_) {
-                                        // ✅ ป้องกัน error: ถ้าค่าปัจจุบันไม่มีใน list ให้รีเซ็ต
-                                        if (_classValue != null &&
-                                            !_classes.contains(_classValue)) {
-                                          _classValue = null;
-                                        }
-
-                                        return DropdownButton<String>(
-                                          value: _classValue,
-                                          isExpanded: true,
-                                          items: _classes
-                                              .map((c) => DropdownMenuItem(
-                                                    value: c,
-                                                    child: Text(c),
-                                                  ))
-                                              .toList(),
-                                          onChanged: (v) =>
-                                              setState(() => _classValue = v),
-                                          hint:
-                                              const Text("Select Classroom"),
-                                        );
-                                      },
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        CustomButton(
-                          text: "Save Changes",
-                          loading: _loading,
-                          onPressed: _saveProfile,
+                          ],
                         ),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 24),
                       ],
-                    ),
+                      CustomButton(
+                        text: "Save Changes",
+                        loading: _loading,
+                        onPressed: _saveProfile,
+                      ),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
 
-          // 🔹 ปุ่ม Back (ด้านบนสุด)
-          Positioned(
-            top: 8,
-            left: 8,
-            child: SafeArea(
+  Widget _buildHeroSection(double statusBar) {
+    const double heroHeight = 170;
+    const double avatarSize = 128;
+
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: heroHeight + statusBar,
+              width: double.infinity,
+              color: const Color(0xFF1E63E9),
+            ),
+            Positioned(
+              top: statusBar + 8,
+              left: 8,
               child: Material(
                 color: Colors.transparent,
                 child: IconButton(
@@ -301,9 +276,60 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
               ),
             ),
+            Positioned(
+              bottom: -avatarSize / 2,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _pickingAvatar ? null : () => _pickAvatar(context),
+                  child: Container(
+                    width: avatarSize,
+                    height: avatarSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 5,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 14,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: AvatarWidget(
+                        imageUrl: _avatarUrl,
+                        radius: avatarSize / 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 25),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            foregroundColor: Colors.black,
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: Colors.black),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
-        ],
-      ),
+          onPressed: _pickingAvatar ? null : () => _pickAvatar(context),
+          child: const Text(
+            "Edit profile",
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
     );
   }
 }

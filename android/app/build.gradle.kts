@@ -54,6 +54,9 @@ android {
         getByName("release") {
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Fallback: ใช้ debug keystore เพื่อให้ติดตั้งบนเครื่องได้ (สำหรับทดสอบ)
+                signingConfig = signingConfigs.getByName("debug")
             }
             isMinifyEnabled = false
             isShrinkResources = false

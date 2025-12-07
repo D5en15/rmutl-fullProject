@@ -23,14 +23,12 @@ function normalizeGrade(avgPoint) {
   return Math.max(0, Math.min(1, norm));
 }
 
-// ✅ สูตรใหม่: ใช้ผลคูณของเกรด (0–1) กับ coverage (0–1) เป็นเปอร์เซ็นต์
-//   - ถ้าเรียนวิชาน้อย (coverage ต่ำ) คะแนนจะยังไม่สูง แม้เกรดดี
-//   - ถ้าเรียนครบ + เกรดดี คะแนนจึงจะสูง
+// ✅ ใช้ "เกรด" + "coverage" แบบถ่วงน้ำหนัก (เน้นเกรด 60% coverage 40%)
 function combineGradeAndCoverage(gradeNorm, coverage) {
   const g = Math.max(0, Math.min(1, gradeNorm || 0));
   const c = Math.max(0, Math.min(1, coverage || 0));
-  const score01 = g * c; // ผลคูณเพื่อให้ทั้งสองอย่างสำคัญเท่ากัน
-  return Math.round(score01 * 100);
+  const score01 = 0.6 * g + 0.4 * c; // 0..1
+  return Math.round(score01 * 100);  // 0..100
 }
 
 // Cloud Function: คำนวณ GPA + SubPLO + PLO + Career
@@ -110,7 +108,7 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
         gpaBySemester: {},
         subploScores: {},
         ploScores: {},
-        careerScores: [],
+        careerScores: []
       });
     }
 
@@ -212,19 +210,19 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       const maxCredits = subploMaxCredits[skill] || credits || 0;
       const coverage = maxCredits > 0 ? Math.min(1, credits / maxCredits) : 0; // 0–1
 
-      const percent = combineGradeAndCoverage(gradeNorm, coverage); // 0–100 ถ่วงเกรด+coverage
+      const percent = combineGradeAndCoverage(gradeNorm, coverage); // 0–100
       const weight01 = percent / 100;          // 0–1
-      const weightedScore = weight01 * 4;      // 0–4 เอาไว้เผื่อ UI ใช้ score/4*100
+      const weightedScore = weight01 * 4;      // 0–4
 
       subploScores[skill] = {
-        rawScore: avg,              // ⭐ เกรดเฉลี่ยดิบ 0–4
-        score: weightedScore,       // ⭐ 0–4 แต่ถ่วงด้วย coverage แล้ว
+        rawScore: avg,
+        score: weightedScore,
         percent,                    // 0–100 ใช้โชว์ Skill strengths
         gradeNorm,                  // 0–1
         coverage,                   // 0–1
-        credits,                    // หน่วยกิตที่เรียนแล้วใน SubPLO นี้
+        credits,                    // หน่วยกิตที่เรียนแล้ว
         maxCredits,                 // หน่วยกิตสูงสุดตามหลักสูตร
-        description: subploMap[skill] || skill,
+        description: subploMap[skill] || skill
       };
     });
 
@@ -244,18 +242,21 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
 
       const key = ploId.toUpperCase();
       ploScores[key] = {
-        rawScore: avg,          // ดิบ 0–4
-        score: weightedScore,   // 0–4 ถ่วงเกรด+coverage
+        rawScore: avg,
+        score: weightedScore,
         percent,
         gradeNorm,
         coverage,
         credits,
         maxCredits,
-        description: ploMap[key] || key,
+        description: ploMap[key] || key
       };
     });
 
-    // 9) career mapping – ใช้ PLO rawScore + coverage รวมกัน
+    // 9) career mapping – ใช้ percent ของ SubPLO โดยตรง + ทักษะหลัก 80% / ทักษะรอง 20%
+    const CORE_WEIGHT = 0.8;
+    const SUPPORT_WEIGHT = 0.2;
+
     const careerDocs = await admin.firestore().collection("career").get();
     const careerScores = [];
 
@@ -264,46 +265,101 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       const careerId = d.career_id;
       if (!careerId) return;
 
-      const relatedPLO = Array.isArray(d.plo_id)
-        ? d.plo_id
-        : d.plo_id
-        ? [d.plo_id]
+      const coreSubploIds = Array.isArray(d.core_subplo_id)
+        ? d.core_subplo_id
+        : d.core_subplo_id
+        ? [d.core_subplo_id]
         : [];
 
-      let sumPoints = 0;   // รวม (rawScore ของ PLO * หน่วยกิตของ PLO)
-      let sumCredits = 0;  // รวมหน่วยกิตของ PLO ที่เกี่ยวข้อง
-      let maxCredits = 0;  // รวม maxCredits ของ PLO ที่เกี่ยวข้อง
+      const supportSubploIds = Array.isArray(d.support_subplo_id)
+        ? d.support_subplo_id
+        : d.support_subplo_id
+        ? [d.support_subplo_id]
+        : [];
 
-      relatedPLO.forEach((pid) => {
-        if (!pid) return;
-        const ploKey = pid.toString().toUpperCase();
-        const plo = ploScores[ploKey];
-        const ploMax = ploMaxCredits[ploKey] || (plo ? plo.maxCredits : 0) || 0;
+      let corePercentSum = 0;
+      let coreCount = 0;
+      let supportPercentSum = 0;
+      let supportCount = 0;
 
-        if (!plo || !plo.credits) return;
+      // สำหรับเกรด/coverage ของสายอาชีพ
+      let sumGradePoints = 0;
+      let sumGradeCredits = 0;
+      let sumCredits = 0;
+      let maxCreditsCareer = 0;
+      const usedForGrade = new Set();
 
-        const raw = plo.rawScore != null ? plo.rawScore : plo.score; // เผื่อเคสเก่า
+      const handleSkill = (sid, isCore) => {
+        if (!sid) return;
 
-        sumPoints += raw * plo.credits;
-        sumCredits += plo.credits;
-        maxCredits += ploMax;
-      });
+        const subKey = sid.toString().toUpperCase();
+        const subMax = subploMaxCredits[subKey] || 0;
+        const sub = subploScores[subKey];
 
-      const avg = sumCredits > 0 ? sumPoints / sumCredits : 0; // 0–4 (ดิบ)
-      const gradeNorm = normalizeGrade(avg);
-      const coverage = maxCredits > 0 ? Math.min(1, sumCredits / maxCredits) : 0;
-      const percent = combineGradeAndCoverage(gradeNorm, coverage);
+        const p =
+          sub && typeof sub.percent === "number" ? sub.percent : 0; // 0–100
+
+        if (isCore) {
+          corePercentSum += p;
+          coreCount += 1;
+        } else {
+          supportPercentSum += p;
+          supportCount += 1;
+        }
+
+        maxCreditsCareer += subMax;
+
+        if (sub && !usedForGrade.has(subKey)) {
+          const raw = sub.rawScore != null ? sub.rawScore : sub.score;
+          const c = sub.credits || 0;
+          sumGradePoints += raw * c;
+          sumGradeCredits += c;
+          sumCredits += c;
+          usedForGrade.add(subKey);
+        }
+      };
+
+      coreSubploIds.forEach((sid) => handleSkill(sid, true));
+      supportSubploIds.forEach((sid) => handleSkill(sid, false));
+
+      const coreAvg = coreCount > 0 ? corePercentSum / coreCount : null;
+      const supportAvg =
+        supportCount > 0 ? supportPercentSum / supportCount : null;
+
+      let basePercent = 0;
+      if (coreAvg !== null && supportAvg !== null) {
+        basePercent = coreAvg * CORE_WEIGHT + supportAvg * SUPPORT_WEIGHT;
+      } else if (coreAvg !== null) {
+        basePercent = coreAvg;
+      } else if (supportAvg !== null) {
+        basePercent = supportAvg;
+      }
+
+      // clamp + ปัดให้เป็นจำนวนเต็ม
+      let percent = basePercent;
+      if (percent == null || Number.isNaN(percent)) percent = 0;
+      percent = Math.round(Math.max(0, Math.min(100, percent)));
+      const match01 = percent / 100;
+
+      const avgRaw =
+        sumGradeCredits > 0 ? sumGradePoints / sumGradeCredits : 0;
+      const gradeNormCareer = normalizeGrade(avgRaw);
+      const coverageCareer =
+        maxCreditsCareer > 0
+          ? Math.min(1, sumCredits / maxCreditsCareer)
+          : 0;
 
       careerScores.push({
         career_id: careerId,
         thname: d.career_thname || "",
         enname: d.career_enname || "",
-        rawScore: avg,      // 0–4 ดิบของสายอาชีพ
-        percent,            // 0–100 ถ่วงด้วย coverage
-        gradeNorm,          // 0–1
-        coverage,           // 0–1
+        match: match01,
+        percent,                 // ใช้โชว์ในหน้า Recommended careers
+        rawScore: avgRaw,        // 0–4 เกรดเฉลี่ยดิบของ SubPLO กลุ่มนี้
+        gradeNorm: gradeNormCareer,
+        coverage: coverageCareer,
         credits: sumCredits,
-        maxCredits,
+        maxCredits: maxCreditsCareer
       });
     });
 
@@ -312,7 +368,7 @@ exports.calculateStudentMetrics = functions.https.onRequest(async (req, res) => 
       gpaBySemester,
       subploScores,
       ploScores,
-      careerScores,
+      careerScores
     });
   } catch (err) {
     console.error(err);

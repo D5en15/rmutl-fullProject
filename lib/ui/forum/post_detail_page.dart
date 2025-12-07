@@ -61,6 +61,46 @@ class _PostDetailPageState extends State<PostDetailPage> {
     super.dispose();
   }
 
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      barrierDismissible: true,
+      builder: (dialogCtx) => Stack(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(dialogCtx).pop(),
+            child: Container(
+              color: Colors.black,
+              alignment: Alignment.center,
+              child: InteractiveViewer(
+                child: Image.network(url),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 30,
+            right: 20,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.2),
+              ),
+              child: IconButton(
+                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                icon: const Icon(Icons.close, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,12 +121,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   .doc(widget.postId)
                   .snapshots(),
               builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snap.hasData || !snap.data!.exists) {
-                  return const Center(child: Text("Post not found"));
-                }
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snap.hasData || !snap.data!.exists) {
+                    return const Center(child: Text("Post not found"));
+                  }
 
                 final data = snap.data!.data() as Map<String, dynamic>;
                 final title = data['post_title'] ?? '';
@@ -161,19 +201,25 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     if (imageUrl != null && imageUrl.isNotEmpty) ...[
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          imageUrl,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return const Padding(
-                              padding: EdgeInsets.all(30),
-                              child: Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          },
+                        child: GestureDetector(
+                          onTap: () => _showFullImage(context, imageUrl),
+                          child: AspectRatio(
+                            aspectRatio: 3 / 4,
+                            child: Image.network(
+                              imageUrl,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const Padding(
+                                  padding: EdgeInsets.all(30),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -204,7 +250,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                               child: CircularProgressIndicator());
                         }
                         if (!snapC.hasData || snapC.data!.docs.isEmpty) {
-                          return const Text("ยังไม่มีความคิดเห็น",
+                          return const Text("No comments yet",
                               style: TextStyle(color: _muted));
                         }
 
@@ -244,7 +290,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     child: TextField(
                       controller: _commentCtrl,
                       decoration: const InputDecoration(
-                        hintText: "เขียนความคิดเห็น...",
+                        hintText: "Write a comment...",
                         border: InputBorder.none,
                       ),
                     ),

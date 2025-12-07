@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:dropdown_search/dropdown_search.dart';
 
 class EditSubjectPage extends StatefulWidget {
   const EditSubjectPage({super.key, required this.enrollmentId});
@@ -19,24 +18,36 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
   static const _label = Color(0xFF6B6F7E);
   static const _border = Color(0xFFE1E5F2);
   static const _errorRed = Color(0xFFE53935);
+  static const Map<String, String> _legacySemesterMap = {
+    "ปี 1 เทอม 1": "Year 1 Term 1",
+    "ปี 1 เทอม 2": "Year 1 Term 2",
+    "ปี 2 เทอม 1": "Year 2 Term 1",
+    "ปี 2 เทอม 2": "Year 2 Term 2",
+    "ปี 3 เทอม 1": "Year 3 Term 1",
+    "ปี 3 เทอม 2": "Year 3 Term 2",
+    "ปี 4 เทอม 1": "Year 4 Term 1",
+    "ปี 4 เทอม 2": "Year 4 Term 2",
+  };
 
   final _formKey = GlobalKey<FormState>();
   String? _subjectId;
   String? _semester;
   String? _grade;
+  Map<String, dynamic>? _selectedSubject;
   bool _loading = true;
+  late final TextEditingController _subjectDisplayController;
 
   String? _userId; // มาจากตาราง user
 
   final _semesters = const [
-    "ปี 1 เทอม 1",
-    "ปี 1 เทอม 2",
-    "ปี 2 เทอม 1",
-    "ปี 2 เทอม 2",
-    "ปี 3 เทอม 1",
-    "ปี 3 เทอม 2",
-    "ปี 4 เทอม 1",
-    "ปี 4 เทอม 2",
+    "Year 1 Term 1",
+    "Year 1 Term 2",
+    "Year 2 Term 1",
+    "Year 2 Term 2",
+    "Year 3 Term 1",
+    "Year 3 Term 2",
+    "Year 4 Term 1",
+    "Year 4 Term 2",
   ];
 
   final _grades = const [
@@ -47,7 +58,14 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
   @override
   void initState() {
     super.initState();
+    _subjectDisplayController = TextEditingController();
     _loadUserId();
+  }
+
+  @override
+  void dispose() {
+    _subjectDisplayController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserId() async {
@@ -74,39 +92,86 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
     if (doc.exists) {
       final data = doc.data()!;
+      final subjectInfo = await _resolveSubjectInfo(data['subject_id']);
+      if (!mounted) return;
       setState(() {
         _subjectId = data['subject_id'];
-        _semester = data['enrollment_semester'];
+        _semester = _normalizeSemester(data['enrollment_semester']);
         _grade = data['enrollment_grade'];
+        _selectedSubject = subjectInfo ??
+            {
+              'id': data['subject_id'],
+              'subject_thname': '',
+              'subject_enname': '',
+            };
         _loading = false;
+        _subjectDisplayController.text = _subjectLabel();
       });
     } else {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchSubjects(String filter) async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('subject').orderBy('subject_id').get();
+  Future<Map<String, dynamic>?> _resolveSubjectInfo(String? subjectId) async {
+    if (subjectId == null) return null;
+    try {
+      final directDoc =
+          await FirebaseFirestore.instance.collection('subject').doc(subjectId).get();
+      if (directDoc.exists && directDoc.data() != null) {
+        final data = directDoc.data()!;
+        return {
+          'id': data['subject_id'],
+          'subject_thname': data['subject_thname'],
+          'subject_enname': data['subject_enname'],
+        };
+      }
 
-    return snapshot.docs
-        .map((doc) => {
-              'id': doc['subject_id'],
-              'subject_thname': doc['subject_thname'],
-              'subject_enname': doc['subject_enname'],
-            })
-        .where((s) =>
-            s['id'].toString().toLowerCase().contains(filter.toLowerCase()) ||
-            s['subject_thname'].toString().toLowerCase().contains(filter.toLowerCase()) ||
-            s['subject_enname'].toString().toLowerCase().contains(filter.toLowerCase()))
-        .toList();
+      final query = await FirebaseFirestore.instance
+          .collection('subject')
+          .where('subject_id', isEqualTo: subjectId)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        final data = query.docs.first.data();
+        return {
+          'id': data['subject_id'],
+          'subject_thname': data['subject_thname'],
+          'subject_enname': data['subject_enname'],
+        };
+      }
+    } catch (_) {
+      // ignore and fallback to null
+    }
+    return null;
+  }
+
+  String? _normalizeSemester(String? value) {
+    if (value == null) return null;
+    if (_semesters.contains(value)) return value;
+    final mapped = _legacySemesterMap[value];
+    if (mapped != null && _semesters.contains(mapped)) {
+      return mapped;
+    }
+    return null;
+  }
+
+  String _subjectLabel() {
+    if (_selectedSubject != null) {
+      final id = (_selectedSubject?['id'] ?? '').toString();
+      final th = (_selectedSubject?['subject_thname'] ?? '').toString();
+      final en = (_selectedSubject?['subject_enname'] ?? '').toString();
+      if (th.isEmpty && en.isEmpty) return id;
+      return "$id • $th ($en)";
+    }
+    return _subjectId ?? '';
   }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_subjectId == null || _semester == null || _grade == null || _userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณากรอกข้อมูลให้ครบ')),
+        const SnackBar(content: Text('Please complete all fields')),
       );
       return;
     }
@@ -124,7 +189,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('✅ แก้ไขรายวิชาเรียบร้อย')));
+        .showSnackBar(const SnackBar(content: Text('Subject updated successfully')));
     context.pop();
   }
 
@@ -136,7 +201,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('🗑️ ลบรายวิชาแล้ว')));
+        .showSnackBar(const SnackBar(content: Text('Subject removed')));
     context.pop({'deleted': true});
   }
 
@@ -166,9 +231,11 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("Edit Subject"),
-        backgroundColor: _headerBG,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -178,28 +245,10 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
           child: Column(
             children: [
               _fieldLabel("Subject"),
-              DropdownSearch<Map<String, dynamic>>(
-                asyncItems: (filter) => _fetchSubjects(filter),
-                itemAsString: (item) =>
-                    "${item['id']} • ${item['subject_thname']} (${item['subject_enname']})",
-                selectedItem: _subjectId != null
-                    ? {'id': _subjectId!, 'subject_thname': '', 'subject_enname': ''}
-                    : null,
-                onChanged: (v) => setState(() => _subjectId = v?['id']),
-                validator: (v) => v == null ? 'กรุณาเลือกรายวิชา' : null,
-                dropdownDecoratorProps: DropDownDecoratorProps(
-                  dropdownSearchDecoration:
-                      _boxDeco().copyWith(hintText: "พิมพ์ค้นหารายวิชา..."),
-                ),
-                popupProps: const PopupProps.dialog(
-                  showSearchBox: true,
-                  searchFieldProps: TextFieldProps(
-                    decoration: InputDecoration(
-                      hintText: "ค้นหารายวิชา...",
-                      contentPadding: EdgeInsets.all(12),
-                    ),
-                  ),
-                ),
+              TextFormField(
+                controller: _subjectDisplayController,
+                readOnly: true,
+                decoration: _boxDeco(),
               ),
               const SizedBox(height: 14),
 
@@ -209,7 +258,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
                 decoration: _boxDeco(),
                 items: _semesters.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: (v) => setState(() => _semester = v),
-                validator: (v) => v == null ? 'กรุณาเลือกเทอม' : null,
+                validator: (v) => v == null ? 'Please select a term' : null,
               ),
               const SizedBox(height: 14),
 
@@ -219,7 +268,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
                 decoration: _boxDeco(),
                 items: _grades.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: (v) => setState(() => _grade = v),
-                validator: (v) => v == null ? 'กรุณาเลือกเกรด' : null,
+                validator: (v) => v == null ? 'Please select a grade' : null,
               ),
               const SizedBox(height: 24),
 
@@ -231,7 +280,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   minimumSize: const Size.fromHeight(48),
                 ),
-                child: const Text("บันทึกการแก้ไข"),
+                child: const Text("Save changes"),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
@@ -242,7 +291,7 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   minimumSize: const Size.fromHeight(48),
                 ),
-                child: const Text("ลบรายวิชา"),
+                child: const Text("Delete subject"),
               ),
             ],
           ),

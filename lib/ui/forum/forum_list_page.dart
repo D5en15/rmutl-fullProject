@@ -12,6 +12,7 @@ const double kCardRadius = 12.0;
 
 class ForumListPage extends StatefulWidget {
   const ForumListPage({super.key});
+  static const _primary = Color(0xFF3D5CFF);
 
   @override
   State<ForumListPage> createState() => _ForumListPageState();
@@ -94,12 +95,6 @@ class _ForumListPageState extends State<ForumListPage> {
                       color: Colors.black,
                     ),
                   ),
-                  IconButton(
-                    tooltip: "Create post",
-                    icon: const Icon(Icons.add_circle_outline,
-                        color: Colors.black, size: 28),
-                    onPressed: () => context.push('$base/forum/create'),
-                  ),
                 ],
               ),
             ),
@@ -131,22 +126,42 @@ class _ForumListPageState extends State<ForumListPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text("My posts"),
-                    selected: _showMyPostsOnly,
-                    onSelected: (v) => setState(() => _showMyPostsOnly = v),
-                    selectedColor: Colors.blueAccent.withOpacity(0.15),
-                    checkmarkColor: Colors.blueAccent,
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      side: BorderSide(
-                        color: _showMyPostsOnly
-                            ? Colors.blueAccent
-                            : Colors.grey.shade400,
+                  SizedBox(
+                    height: 46,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: _showMyPostsOnly
+                              ? Colors.blueAccent
+                              : Colors.grey.shade400,
+                        ),
+                        backgroundColor: _showMyPostsOnly
+                            ? Colors.blueAccent.withOpacity(0.12)
+                            : Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(20),
+                      onPressed: () =>
+                          setState(() => _showMyPostsOnly = !_showMyPostsOnly),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.person, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            "My posts",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _showMyPostsOnly
+                                  ? Colors.blueAccent
+                                  : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
@@ -162,7 +177,7 @@ class _ForumListPageState extends State<ForumListPage> {
                   }
                   if (!snap.hasData || snap.data!.docs.isEmpty) {
                     return const Center(
-                      child: Text("ยังไม่มีโพสต์",
+                      child: Text("No posts yet",
                           style: TextStyle(color: kForumMuted)),
                     );
                   }
@@ -184,7 +199,7 @@ class _ForumListPageState extends State<ForumListPage> {
 
                   if (filteredPosts.isEmpty) {
                     return const Center(
-                      child: Text("ไม่พบโพสต์ที่ตรงกับเงื่อนไข",
+                      child: Text("No posts match your search",
                           style: TextStyle(color: kForumMuted)),
                     );
                   }
@@ -202,7 +217,8 @@ class _ForumListPageState extends State<ForumListPage> {
                             ? _timeAgo(post.createdAt!)
                             : "",
                         onView: () => context.push('$base/forum/${post.id}'),
-                        canManage: (_role == 'admin') ||
+                        canManage: (role == 'admin') ||
+                            (_role == 'admin') ||
                             (_currentUserId == post.authorId),
                         base: base,
                       );
@@ -213,6 +229,11 @@ class _ForumListPageState extends State<ForumListPage> {
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push('$base/forum/create'),
+        backgroundColor: ForumListPage._primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -233,6 +254,17 @@ class _PostCard extends StatelessWidget {
   final bool canManage;
   final String base;
 
+  Widget _avatar(String? url) {
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: const Color(0xFFD9E3FF),
+      backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
+      child: (url == null || url.isEmpty)
+          ? const Icon(Icons.person, size: 18, color: Colors.white)
+          : null,
+    );
+  }
+
   Future<void> _deletePost(BuildContext context) async {
     try {
       final postRef =
@@ -244,12 +276,12 @@ class _PostCard extends StatelessWidget {
       await postRef.delete();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ลบโพสต์และความคิดเห็นสำเร็จ')),
+        const SnackBar(content: Text('Post and comments deleted')),
       );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+        SnackBar(content: Text('Error: $e')),
       );
     }
   }
@@ -273,7 +305,7 @@ class _PostCard extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.edit_outlined,
                       color: Colors.blueAccent),
-                  title: const Text("แก้ไขโพสต์"),
+                  title: const Text("Edit post"),
                   onTap: () {
                     Navigator.of(rootContext).pop();
                     context.push('$base/forum/${post.id}/edit');
@@ -282,7 +314,7 @@ class _PostCard extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.delete_outline,
                       color: Colors.redAccent),
-                  title: const Text("ลบโพสต์"),
+                  title: const Text("Delete post"),
                   onTap: () {
                     Navigator.of(rootContext).pop();
                     _confirmDelete(context);
@@ -306,16 +338,16 @@ class _PostCard extends StatelessWidget {
     final confirm = await showDialog<bool>(
       context: Navigator.of(context, rootNavigator: true).context,
       builder: (ctx) => AlertDialog(
-        title: const Text("ยืนยันการลบโพสต์"),
-        content: const Text("คุณต้องการลบโพสต์นี้หรือไม่?"),
+        title: const Text("Delete post"),
+        content: const Text("Are you sure you want to delete this post?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("ยกเลิก"),
+            child: const Text("Cancel"),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("ลบ",
+            child: const Text("Delete",
                 style: TextStyle(color: Colors.redAccent)),
           ),
         ],
@@ -340,16 +372,34 @@ class _PostCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(post.authorName,
-                      style: const TextStyle(color: kForumMuted, fontSize: 12)),
-                  const SizedBox(width: 8),
-                  const Text('•',
-                      style: TextStyle(color: kForumMuted, fontSize: 12)),
-                  const SizedBox(width: 8),
-                  Text(timeText,
-                      style: const TextStyle(color: kForumMuted, fontSize: 12)),
-                  const Spacer(),
+                  _avatar(post.authorAvatar),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.authorName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: kForumTextDark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          timeText,
+                          style: const TextStyle(
+                            color: kForumMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (canManage)
                     IconButton(
                       icon: const Icon(Icons.more_vert,

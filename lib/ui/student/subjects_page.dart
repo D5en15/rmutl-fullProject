@@ -1,5 +1,6 @@
 // lib/ui/student/subjects_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,6 +16,17 @@ class SubjectsPage extends StatefulWidget {
 class _SubjectsPageState extends State<SubjectsPage> {
   String? _userId; // user_id จากตาราง user
   String _search = "";
+  String _gradeFilter = "All Grades";
+  String _termFilter = "All Terms";
+  List<String> _gradeOptions = ["All Grades"];
+  List<String> _termOptions = ["All Terms"];
+  bool _hasAnyEnrollment = false;
+  bool _initialLoaded = false;
+  List<Map<String, dynamic>> _cachedEnrollments = const [];
+
+  void _handleAddPressed(BuildContext context) {
+    context.push('/student/subjects/add');
+  }
 
   @override
   void initState() {
@@ -77,86 +89,301 @@ class _SubjectsPageState extends State<SubjectsPage> {
     });
   }
 
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String localGrade = _gradeOptions.contains(_gradeFilter)
+            ? _gradeFilter
+            : "All Grades";
+        String localTerm = _termOptions.contains(_termFilter)
+            ? _termFilter
+            : "All Terms";
+
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            return Container(
+              color: Colors.white,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 20,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  const Text(
+                    "Filter subjects",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: localGrade,
+                    decoration: InputDecoration(
+                      labelText: "Grade",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    items: _gradeOptions
+                        .map(
+                          (g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(g),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      if (val == null) return;
+                      modalSetState(() => localGrade = val);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: localTerm,
+                    decoration: InputDecoration(
+                      labelText: "Semester",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    items: _termOptions
+                        .map(
+                          (t) => DropdownMenuItem(
+                            value: t,
+                            child: Text(t),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      if (val == null) return;
+                      modalSetState(() => localTerm = val);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(
+                          context,
+                          {"grade": localGrade, "term": localTerm},
+                        ),
+                        child: const Text("Apply"),
+                      ),
+                    ],
+                  ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _gradeFilter = result["grade"] ?? _gradeFilter;
+        _termFilter = result["term"] ?? _termFilter;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
-      appBar: AppBar(
-        title: const Text('Subjects'),
-        backgroundColor: const Color(0xFFF1F2F6),
-        foregroundColor: Colors.black87,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "ค้นหารายวิชา (รหัส/ชื่อวิชา)...",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      "Subjects",
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: "Filter grades & terms",
+                    icon: const Icon(Icons.tune, color: Colors.black87),
+                    onPressed: _openFilterSheet,
+                  ),
+                ],
               ),
-              onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
             ),
-          ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: "Search by code or name...",
+                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: Colors.black12, width: 1),
+                  ),
+                ),
+                onChanged: (v) =>
+                    setState(() => _search = v.trim().toLowerCase()),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _userId == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : StreamBuilder<List<Map<String, dynamic>>>(
+                      stream: _loadEnrollments(),
+                      builder: (context, snapshot) {
+                        final isWaiting = snapshot.connectionState ==
+                            ConnectionState.waiting;
+                        if (isWaiting && !_initialLoaded) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+
+                        List<Map<String, dynamic>> dataList =
+                            snapshot.data ?? _cachedEnrollments;
+                        if (snapshot.hasData) {
+                          _cachedEnrollments = snapshot.data!;
+                          _initialLoaded = true;
+                        }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted || !snapshot.hasData) return;
+                          final hasAny = dataList.isNotEmpty;
+                          if (_hasAnyEnrollment != hasAny) {
+                            setState(() => _hasAnyEnrollment = hasAny);
+                          }
+                        });
+
+                        final gradeSet = <String>{};
+                        final termSet = <String>{};
+                        for (final data in dataList) {
+                          final grade = (data['enrollment_grade'] ?? '')
+                              .toString()
+                              .trim();
+                          if (grade.isNotEmpty) gradeSet.add(grade);
+                          final term = (data['enrollment_semester'] ?? '')
+                              .toString()
+                              .trim();
+                          if (term.isNotEmpty) termSet.add(term);
+                        }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          final newGrades = [
+                            "All Grades",
+                            ...gradeSet.toList()..sort(),
+                          ];
+                          final newTerms = [
+                            "All Terms",
+                            ...termSet.toList()..sort(),
+                          ];
+                          if (!listEquals(newGrades, _gradeOptions) ||
+                              !listEquals(newTerms, _termOptions)) {
+                            setState(() {
+                              _gradeOptions = newGrades;
+                              _termOptions = newTerms;
+                              if (!_gradeOptions.contains(_gradeFilter)) {
+                                _gradeFilter = "All Grades";
+                              }
+                              if (!_termOptions.contains(_termFilter)) {
+                                _termFilter = "All Terms";
+                              }
+                            });
+                          }
+                        });
+
+                        final docs = dataList.where((data) {
+                          final code =
+                              (data['subject_id'] ?? '').toString().toLowerCase();
+                          final nameTh =
+                              (data['subject_thname'] ?? '').toString().toLowerCase();
+                          final nameEn =
+                              (data['subject_enname'] ?? '').toString().toLowerCase();
+                          final matchSearch = code.contains(_search) ||
+                              nameTh.contains(_search) ||
+                              nameEn.contains(_search);
+                          final grade = (data['enrollment_grade'] ?? '')
+                              .toString()
+                              .trim();
+                          final term = (data['enrollment_semester'] ?? '')
+                              .toString()
+                              .trim();
+                          final matchGrade =
+                              _gradeFilter == "All Grades" || grade == _gradeFilter;
+                          final matchTerm =
+                              _termFilter == "All Terms" || term == _termFilter;
+                          return matchSearch && matchGrade && matchTerm;
+                        }).toList();
+
+                        if (docs.isEmpty) {
+                          return const Center(child: Text("No subjects yet"));
+                        }
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final data = docs[i];
+                            return _SubjectTile(
+                              id: data["id"],
+                              name:
+                                  "${data['subject_id']} • ${data['subject_thname']} (${data['subject_enname']})",
+                              grade: data['enrollment_grade'] ?? '',
+                              credits:
+                                  data['subject_credits']?.toString() ?? '',
+                              semester: data['enrollment_semester'] ?? '',
+                              onEdit: () => context.push(
+                                '/student/subjects/${data["id"]}/edit',
+                                extra: data,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
 
-      body: _userId == null
-          ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _loadEnrollments(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text("ยังไม่มีรายวิชา"));
-                }
-
-                final docs = snapshot.data!.where((data) {
-                  final code = (data['subject_id'] ?? '').toString().toLowerCase();
-                  final nameTh = (data['subject_thname'] ?? '').toString().toLowerCase();
-                  final nameEn = (data['subject_enname'] ?? '').toString().toLowerCase();
-                  return code.contains(_search) ||
-                      nameTh.contains(_search) ||
-                      nameEn.contains(_search);
-                }).toList();
-
-                if (docs.isEmpty) {
-                  return const Center(child: Text("ไม่พบรายวิชาที่ค้นหา"));
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                  itemCount: docs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) {
-                    final data = docs[i];
-                    return _SubjectTile(
-                      id: data["id"],
-                      name:
-                          "${data['subject_id']} • ${data['subject_thname']} (${data['subject_enname']})",
-                      grade: data['enrollment_grade'] ?? '',
-                      credits: data['subject_credits']?.toString() ?? '',
-                      semester: data['enrollment_semester'] ?? '',
-                      onEdit: () =>
-                          context.push('/student/subjects/${data["id"]}/edit', extra: data),
-                    );
-                  },
-                );
-              },
-            ),
-
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/student/subjects/add'),
+        onPressed: () => _handleAddPressed(context),
         backgroundColor: SubjectsPage._primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),

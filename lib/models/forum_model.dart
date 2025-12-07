@@ -7,6 +7,7 @@ class ForumPost {
   final String content;
   final String authorId;
   final String authorName;
+  final String? authorAvatar;
   final String? imageUrl; // ✅ เพิ่มฟิลด์รูปภาพ
   final DateTime? createdAt;
 
@@ -16,6 +17,7 @@ class ForumPost {
     required this.content,
     required this.authorId,
     required this.authorName,
+    this.authorAvatar,
     this.imageUrl,
     this.createdAt,
   });
@@ -29,6 +31,7 @@ class ForumPost {
       content: data['post_content'] ?? '',
       authorId: data['user_id']?.toString() ?? '',
       authorName: data['authorName'] ?? 'Unknown',
+      authorAvatar: data['authorAvatar'],
       imageUrl: data['post_img'], // ✅ รองรับรูปภาพ
       createdAt: (data['post_time'] is Timestamp)
           ? (data['post_time'] as Timestamp).toDate()
@@ -42,6 +45,7 @@ class ForumPost {
         'post_content': content,
         'user_id': authorId,
         'authorName': authorName,
+        'authorAvatar': authorAvatar,
         'post_img': imageUrl,
         'post_time': createdAt ?? FieldValue.serverTimestamp(),
       };

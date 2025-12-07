@@ -112,6 +112,15 @@ class AppRouter {
       GoRoute(path: '/teacher/messages', builder: (_, __) => const MessagesPage()),
       GoRoute(path: '/admin/messages', builder: (_, __) => const MessagesPage()),
       GoRoute(
+          path: '/student/notifications',
+          builder: (_, __) => const NotificationPage()),
+      GoRoute(
+          path: '/teacher/notifications',
+          builder: (_, __) => const NotificationPage()),
+      GoRoute(
+          path: '/admin/notifications',
+          builder: (_, __) => const NotificationPage()),
+      GoRoute(
         path: '/chat/:id',
         builder: (_, s) => ChatPage(chatsId: s.pathParameters['id']!),
       ),
@@ -162,9 +171,6 @@ class AppRouter {
           ),
           GoRoute(path: '/student/settings', builder: (_, __) => const SettingsPage()),
           GoRoute(path: '/student/profile', builder: (_, __) => const ProfilePage()),
-          GoRoute(
-              path: '/student/notifications',
-              builder: (_, __) => const NotificationPage()),
         ],
       ),
 
@@ -206,9 +212,6 @@ class AppRouter {
           ),
           GoRoute(path: '/teacher/settings', builder: (_, __) => const SettingsPage()),
           GoRoute(path: '/teacher/profile', builder: (_, __) => const ProfilePage()),
-          GoRoute(
-              path: '/teacher/notifications',
-              builder: (_, __) => const NotificationPage()),
         ],
       ),
 

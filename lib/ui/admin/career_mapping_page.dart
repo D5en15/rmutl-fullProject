@@ -15,10 +15,11 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
   static const _primary = Color(0xFF3D5CFF);
 
   String? _selectedCareer;
-  List<String> _selectedPLOs = [];
+  List<String> _selectedCore = [];
+  List<String> _selectedSupport = [];
 
   List<Map<String, String>> _allCareers = [];
-  List<Map<String, String>> _allPLOs = [];
+  List<Map<String, String>> _allSubplos = [];
 
   @override
   void initState() {
@@ -29,8 +30,8 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
   Future<void> _loadData() async {
     final careerSnap =
         await FirebaseFirestore.instance.collection('career').get();
-    final ploSnap =
-        await FirebaseFirestore.instance.collection('plo').get();
+    final subploSnap =
+        await FirebaseFirestore.instance.collection('subplo').get();
 
     setState(() {
       _allCareers = careerSnap.docs.map((d) {
@@ -42,11 +43,12 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
         };
       }).toList();
 
-      _allPLOs = ploSnap.docs.map((d) {
+      _allSubplos = subploSnap.docs.map((d) {
         final data = d.data();
         return {
-          "plo_id": data["plo_id"]?.toString() ?? d.id,
-          "plo_description": data["plo_description"]?.toString() ?? "",
+          "subplo_id": data["subplo_id"]?.toString() ?? d.id,
+          "subplo_description":
+              data["subplo_description"]?.toString() ?? "",
         };
       }).toList();
     });
@@ -61,7 +63,8 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
     if (doc.exists) {
       final data = doc.data()!;
       setState(() {
-        _selectedPLOs = List<String>.from(data["plo_id"] ?? []);
+        _selectedCore = List<String>.from(data["core_subplo_id"] ?? []);
+        _selectedSupport = List<String>.from(data["support_subplo_id"] ?? []);
       });
     }
   }
@@ -72,9 +75,10 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
     await FirebaseFirestore.instance
         .collection("career")
         .doc(_selectedCareer)
-        .update({
-      "plo_id": _selectedPLOs,
-    });
+        .set({
+      "core_subplo_id": _selectedCore,
+      "support_subplo_id": _selectedSupport,
+    }, SetOptions(merge: true));
 
     // ❌ ลบ SnackBar แจ้งเตือนออก
   }
@@ -84,7 +88,7 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Career ↔ PLO Mapping"),
+        title: const Text("Career ↔ SubPLO Mapping"),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
@@ -93,7 +97,7 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
           onPressed: () => context.go('/admin/config'),
         ),
       ),
-      body: (_allCareers.isEmpty || _allPLOs.isEmpty)
+      body: (_allCareers.isEmpty || _allSubplos.isEmpty)
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),
@@ -122,35 +126,97 @@ class _CareerMappingPageState extends State<CareerMappingPage> {
                     onChanged: (value) async {
                       if (value != null) {
                         setState(() {
-                          _selectedCareer = value["career_id"];
-                          _selectedPLOs.clear();
+                _selectedCareer = value["career_id"];
+                _selectedCore.clear();
+                _selectedSupport.clear();
                         });
                         await _loadCareerMapping(value["career_id"]!);
                       }
                     },
                   ),
 
-                  const SizedBox(height: 20),
-                  const Text("เลือก PLOs",
+                  const SizedBox(height: 16),
+                  const Text("SubPLO Mapping",
                       style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom:
+                            BorderSide(color: Colors.black.withOpacity(0.08)),
+                      ),
+                    ),
+                    child: Row(
+                      children: const [
+                        Expanded(
+                            child: Text('SubPLO',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 13))),
+                        SizedBox(width: 8),
+                        Text('Core',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13)),
+                        SizedBox(width: 20),
+                        Text('Support',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13)),
+                      ],
+                    ),
+                  ),
                   Expanded(
                     child: ListView(
-                      children: _allPLOs.map((plo) {
-                        final pid = plo["plo_id"]!;
-                        final desc = plo["plo_description"]!;
-                        final selected = _selectedPLOs.contains(pid);
-                        return CheckboxListTile(
-                          title: Text("$pid • $desc"),
-                          value: selected,
-                          onChanged: (checked) {
-                            setState(() {
-                              if (checked == true) {
-                                _selectedPLOs.add(pid);
-                              } else {
-                                _selectedPLOs.remove(pid);
-                              }
-                            });
-                          },
+                      children: _allSubplos.map((sub) {
+                        final sid = sub["subplo_id"]!;
+                        final desc = sub["subplo_description"]!;
+                        final isCore = _selectedCore.contains(sid);
+                        final isSupport = _selectedSupport.contains(sid);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                  color: Colors.black.withOpacity(0.05)),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text("$sid • $desc"),
+                              ),
+                              Checkbox(
+                                value: isCore,
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      if (!_selectedCore.contains(sid)) {
+                                        _selectedCore.add(sid);
+                                      }
+                                    } else {
+                                      _selectedCore.remove(sid);
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              Checkbox(
+                                value: isSupport,
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      if (!_selectedSupport.contains(sid)) {
+                                        _selectedSupport.add(sid);
+                                      }
+                                    } else {
+                                      _selectedSupport.remove(sid);
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
                         );
                       }).toList(),
                     ),

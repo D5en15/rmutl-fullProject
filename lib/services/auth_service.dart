@@ -7,23 +7,15 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String input, String password) async {
     try {
-      // 🟦 Check if input is email or username
+      // 🟦 Check if input is email or ID (user_code)
       String email = input;
       Map<String, dynamic>? userData;
       if (!input.contains('@')) {
         var snap = await _db
             .collection('user')
-            .where('user_id', isEqualTo: input)
+            .where('user_code', isEqualTo: input)
             .limit(1)
             .get();
-
-        if (snap.docs.isEmpty) {
-          snap = await _db
-              .collection('user')
-              .where('user_name', isEqualTo: input)
-              .limit(1)
-              .get();
-        }
 
         if (snap.docs.isEmpty) throw AuthException('User account not found.');
         userData = snap.docs.first.data();
@@ -52,7 +44,7 @@ class AuthService {
       String msg;
       switch (e.code) {
         case 'user-not-found':
-          msg = 'No account found. Please check your email or username.';
+          msg = 'No account found. Please check your email or ID.';
           break;
         case 'wrong-password':
           msg = 'Incorrect password. Please try again.';
