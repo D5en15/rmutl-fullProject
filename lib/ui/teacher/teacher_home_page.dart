@@ -25,13 +25,14 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   int _admins = 0;
   String? _avatarUrl;
 
-  String? _room; // ✅ null ตอนเริ่มต้น
-  final _rooms = const ['SE66_A', 'SE66_B', 'SE67_A', 'SE67_B'];
+  String? _selectedYear;
+  List<String> _years = [];
 
   @override
   void initState() {
     super.initState();
     _loadCounts();
+    _loadYears();
   }
 
   Future<void> _loadCounts() async {
@@ -65,6 +66,28 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
     });
   }
 
+  Future<void> _loadYears() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_role', isEqualTo: 'Student')
+        .get();
+
+    final set = <String>{};
+    for (final doc in snap.docs) {
+      final uid = (doc.data()['user_id'] ?? '').toString();
+      if (uid.length >= 2) {
+        set.add(uid.substring(0, 2));
+      }
+    }
+    final sorted = set.toList()..sort();
+    setState(() {
+      _years = sorted;
+      if (_selectedYear != null && !_years.contains(_selectedYear)) {
+        _selectedYear = null;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -89,9 +112,9 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                 students: _students,
                 teachers: _teachers,
                 admins: _admins,
-                room: _room,
-                rooms: _rooms,
-                onRoomChanged: (v) => setState(() => _room = v),
+                years: _years,
+                selectedYear: _selectedYear,
+                onYearChanged: (v) => setState(() => _selectedYear = v),
               ),
             ],
           ),
@@ -117,59 +140,64 @@ class _BlueHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 180,
-      color: _T.primary,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 188,
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      decoration: const BoxDecoration(color: _T.primary),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Row(
             children: [
-              Text(
-                roleLabel,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: .2,
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: () =>
+                    context.go('/teacher/messages?tab=notifications'),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.notifications_none_rounded,
+                      color: Colors.white, size: 28),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      roleLabel,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: onProfileTap,
+                child: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.white,
+                  backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
+                      ? NetworkImage(photoUrl!)
+                      : null,
+                  child: (photoUrl == null || photoUrl!.isEmpty)
+                      ? const Icon(Icons.person, color: Colors.black54, size: 22)
+                      : null,
+                ),
               ),
             ],
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: InkWell(
-              onTap: () => context.go('/teacher/messages?tab=notifications'),
-              borderRadius: BorderRadius.circular(24),
-              child: const Padding(
-                padding: EdgeInsets.all(6),
-                child: Icon(Icons.notifications_none_rounded,
-                    color: Colors.white, size: 26),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: InkWell(
-              onTap: onProfileTap,
-              borderRadius: BorderRadius.circular(24),
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.white,
-                backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
-                    ? NetworkImage(photoUrl!)
-                    : null,
-                child: (photoUrl == null || photoUrl!.isEmpty)
-                    ? const Icon(Icons.person, color: Colors.black54, size: 20)
-                    : null,
-              ),
-            ),
           ),
         ],
       ),
@@ -184,15 +212,15 @@ class _Body extends StatelessWidget {
     required this.students,
     required this.teachers,
     required this.admins,
-    required this.room,
-    required this.rooms,
-    required this.onRoomChanged,
+    required this.years,
+    required this.selectedYear,
+    required this.onYearChanged,
   });
 
   final int total, students, teachers, admins;
-  final String? room;
-  final List<String> rooms;
-  final ValueChanged<String> onRoomChanged;
+  final List<String> years;
+  final String? selectedYear;
+  final ValueChanged<String?> onYearChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -239,11 +267,12 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
-          const Text('Select room',
+          const Text(
+              'Select student cohort',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
 
-          // ✅ Dropdown: มี "เลือกห้องเรียน" เป็นค่า default
+          // ✅ Dropdown: เลือกชั้นปีจากรหัสนักศึกษา (2 ตัวแรก)
           Container(
             decoration: BoxDecoration(
               color: _T.soft,
@@ -253,16 +282,16 @@ class _Body extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: room,
-                hint: const Text('เลือกห้องเรียน'),
+                value: selectedYear,
+                hint: const Text('Select student year'),
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 isExpanded: true,
-                items: rooms
-                    .map((r) =>
-                        DropdownMenuItem(value: r, child: Text(r)))
+                items: years
+                    .map((y) => DropdownMenuItem(
+                        value: y, child: Text('Year $y')))
                     .toList(),
                 onChanged: (v) {
-                  if (v != null) onRoomChanged(v);
+                  onYearChanged(v);
                 },
               ),
             ),
@@ -275,13 +304,15 @@ class _Body extends StatelessWidget {
             height: 48,
             child: ElevatedButton(
               onPressed: () {
-                if (room == null) {
+                if (selectedYear == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("กรุณาเลือกห้องเรียนก่อน")),
+                    const SnackBar(
+                        content: Text("Please select a student year first")),
                   );
                   return;
                 }
-                context.push('/teacher/students', extra: {'class': room});
+                context.push('/teacher/students',
+                    extra: {'year': selectedYear});
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _T.primary,
@@ -300,7 +331,8 @@ class _Body extends StatelessWidget {
           SizedBox(
             height: 48,
             child: OutlinedButton.icon(
-              onPressed: () => context.push('/teacher/students/all'),
+              onPressed: () => context.push('/teacher/students',
+                  extra: const {'year': null, 'all': true}),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: _T.primary, width: 1.5),
                 shape: RoundedRectangleBorder(
