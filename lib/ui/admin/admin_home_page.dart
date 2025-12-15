@@ -70,7 +70,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 subtitle:
                     'Configure the platform and keep every workflow aligned.',
                 photoUrl: _avatarUrl,
-                onProfileTap: () => context.go(
+                onProfileTap: () => context.push(
                   '/profile/edit',
                   extra: const {'role': 'admin'},
                 ),

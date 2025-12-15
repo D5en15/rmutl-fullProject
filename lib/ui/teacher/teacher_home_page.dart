@@ -67,14 +67,15 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   }
 
   Future<void> _loadYears() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('user')
-        .where('user_role', isEqualTo: 'Student')
-        .get();
+    final snap = await FirebaseFirestore.instance.collection('user').get();
 
     final set = <String>{};
     for (final doc in snap.docs) {
-      final uid = (doc.data()['user_id'] ?? '').toString();
+      final data = doc.data();
+      final role = (data['user_role'] ?? '').toString().toLowerCase();
+      if (role != 'student') continue;
+
+      final uid = (data['user_id'] ?? '').toString();
       if (uid.length >= 2) {
         set.add(uid.substring(0, 2));
       }
@@ -102,7 +103,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
                 subtitle:
                     'Monitor student performance and guide their growth.',
                 photoUrl: _avatarUrl,
-                onProfileTap: () => context.go(
+                onProfileTap: () => context.push(
                   '/profile/edit',
                   extra: const {'role': 'teacher'},
                 ),
@@ -186,16 +187,19 @@ class _BlueHeader extends StatelessWidget {
               InkWell(
                 borderRadius: BorderRadius.circular(24),
                 onTap: onProfileTap,
-                child: CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.white,
-                  backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
-                      ? NetworkImage(photoUrl!)
-                      : null,
-                  child: (photoUrl == null || photoUrl!.isEmpty)
-                      ? const Icon(Icons.person, color: Colors.black54, size: 22)
-                      : null,
-                ),
+                child: Builder(builder: (context) {
+                  final trimmed = photoUrl?.trim() ?? '';
+                  final hasPhoto = trimmed.isNotEmpty;
+                  return CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Colors.white,
+                    backgroundImage: hasPhoto ? NetworkImage(trimmed) : null,
+                    child: hasPhoto
+                        ? null
+                        : const Icon(Icons.person,
+                            color: Colors.black54, size: 22),
+                  );
+                }),
               ),
             ],
           ),
@@ -267,8 +271,7 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
-          const Text(
-              'Select student cohort',
+          const Text('Select student tracker',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
 
@@ -283,7 +286,8 @@ class _Body extends StatelessWidget {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: selectedYear,
-                hint: const Text('Select student year'),
+                hint: const Text('-'),
+                dropdownColor: _T.soft,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 isExpanded: true,
                 items: years

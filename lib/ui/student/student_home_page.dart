@@ -146,7 +146,7 @@ class StudentHomePage extends StatelessWidget {
                         gpa: gpa,
                         photoUrl: avatarUrl,
                         statusBarPadding: statusBar,
-                        onProfileTap: () => context.go(
+                        onProfileTap: () => context.push(
                           '/profile/edit',
                           extra: const {'role': 'student'},
                         ),
