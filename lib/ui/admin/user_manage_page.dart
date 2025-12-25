@@ -84,11 +84,22 @@ class _UserManagePageState extends State<UserManagePage> {
           }).toList();
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('User List'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          onPressed: () => context.go('/admin'),
+        ),
+        title: const Text(
+          'User List',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.add, color: Colors.black),
             onPressed: () => context.go('/admin/users/add'),
           ),
         ],

@@ -14,7 +14,8 @@ class SubjectsPage extends StatefulWidget {
 }
 
 class _SubjectsPageState extends State<SubjectsPage> {
-  String? _userId; // user_id จากตาราง user
+  List<String> _userIdKeys = [];
+  bool _resolvingUserKey = true;
   String _search = "";
   String _gradeFilter = "All Grades";
   String _termFilter = "All Terms";
@@ -35,30 +36,59 @@ class _SubjectsPageState extends State<SubjectsPage> {
   }
 
   Future<void> _loadUserId() async {
-    final email = FirebaseAuth.instance.currentUser?.email;
-    if (email == null) return;
-
-    final snap = await FirebaseFirestore.instance
-        .collection("user")
-        .where("user_email", isEqualTo: email)
-        .limit(1)
-        .get();
-
-    if (snap.docs.isNotEmpty) {
-      setState(() {
-        _userId = snap.docs.first.data()["user_id"].toString();
-      });
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null) {
+      setState(() => _resolvingUserKey = false);
+      return;
     }
+
+    final keys = <String>{};
+    void addKey(String? value, {bool sanitize = true}) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      keys.add(trimmed);
+      if (sanitize) {
+        final normalized = trimmed.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+        if (normalized.isNotEmpty) keys.add(normalized);
+      }
+    }
+
+    addKey(authUser.uid, sanitize: false);
+
+    final email = authUser.email;
+    if (email != null) {
+      final snap = await FirebaseFirestore.instance
+          .collection("user")
+          .where("user_email", isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        final doc = snap.docs.first;
+        final data = doc.data();
+        addKey(doc.id, sanitize: false);
+        addKey(data["user_id"]?.toString());
+        addKey(data["user_code"]?.toString());
+      }
+    }
+
+    final keyList = keys.toList();
+    if (keyList.length > 10) keyList.removeRange(10, keyList.length);
+
+    setState(() {
+      _userIdKeys = keyList;
+      _resolvingUserKey = false;
+    });
   }
 
   Stream<List<Map<String, dynamic>>> _loadEnrollments() {
-    if (_userId == null) {
+    if (_userIdKeys.isEmpty) {
       return const Stream.empty();
     }
 
     return FirebaseFirestore.instance
         .collection("enrollment")
-        .where("user_id", isEqualTo: _userId)
+        .where("user_id", whereIn: _userIdKeys)
         .snapshots()
         .asyncMap((enrollSnap) async {
       List<Map<String, dynamic>> results = [];
@@ -75,7 +105,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
         if (subjDoc.exists) {
           final subject = subjDoc.data()!;
           results.add({
-            "id": e.id, // enrollment document id
+            "id": e.id,
             "subject_id": subject["subject_id"],
             "subject_thname": subject["subject_thname"],
             "subject_enname": subject["subject_enname"],
@@ -261,7 +291,7 @@ class _SubjectsPageState extends State<SubjectsPage> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: _userId == null
+              child: _resolvingUserKey
                   ? const Center(child: CircularProgressIndicator())
                   : StreamBuilder<List<Map<String, dynamic>>>(
                       stream: _loadEnrollments(),
@@ -360,10 +390,18 @@ class _SubjectsPageState extends State<SubjectsPage> {
                               const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final data = docs[i];
+                            final subjectId =
+                                (data['subject_id'] ?? '').toString();
+                            final thName =
+                                (data['subject_thname'] ?? '').toString();
+                            final enName =
+                                (data['subject_enname'] ?? '').toString();
+                            final displayName =
+                                "$subjectId - $thName ($enName)";
+
                             return _SubjectTile(
                               id: data["id"],
-                              name:
-                                  "${data['subject_id']} • ${data['subject_thname']} (${data['subject_enname']})",
+                              name: displayName,
                               grade: data['enrollment_grade'] ?? '',
                               credits:
                                   data['subject_credits']?.toString() ?? '',
@@ -447,7 +485,7 @@ class _SubjectTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Grade $grade • $credits credits • $semester',
+                      'Grade $grade - $credits credits - $semester',
                       style: const TextStyle(
                         color: Color(0xFF8B90A0),
                         fontSize: 12.5,
@@ -468,3 +506,20 @@ class _SubjectTile extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

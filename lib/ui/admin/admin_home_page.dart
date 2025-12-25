@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../widgets/notification_bell.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -17,7 +19,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   int _admins = 0;
   String? _avatarUrl;
 
-  String _selectedRole = 'เลือกบทบาท'; // ค่า default
+  String _selectedRole = 'Select role'; // default value
 
   @override
   void initState() {
@@ -26,7 +28,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   Future<void> _loadCounts() async {
-    // ✅ ใช้ collection 'user' (ไม่มี s)
+    // ใช้ collection 'user'
     final snap = await FirebaseFirestore.instance.collection('user').get();
     int students = 0, teachers = 0, admins = 0;
     String? avatarUrl;
@@ -61,6 +63,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        top: false,
         bottom: false,
         child: SingleChildScrollView(
           child: Column(
@@ -68,7 +71,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               _BlueHeader(
                 roleLabel: 'Administrator',
                 subtitle:
-                    'Configure the platform and keep every workflow aligned.',
+                    'Configure the platform\nand keep every workflow aligned.',
                 photoUrl: _avatarUrl,
                 onProfileTap: () => context.push(
                   '/profile/edit',
@@ -117,10 +120,11 @@ class _BlueHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return Container(
-      height: 180,
+      height: 180 + topInset,
       color: _T.primary,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.fromLTRB(16, topInset + 12, 16, 12),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -137,20 +141,18 @@ class _BlueHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(subtitle,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              // --- แก้ไขจุดนี้: เพิ่ม textAlign: TextAlign.center ---
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
             ],
           ),
           Align(
             alignment: Alignment.centerLeft,
-            child: InkWell(
+            child: NotificationBell(
               onTap: () => context.go('/admin/messages?tab=notifications'),
-              borderRadius: BorderRadius.circular(24),
-              child: const Padding(
-                padding: EdgeInsets.all(6),
-                child: Icon(Icons.notifications_none_rounded,
-                    color: Colors.white, size: 26),
-              ),
             ),
           ),
           Align(
@@ -239,7 +241,7 @@ class _Body extends StatelessWidget {
           ),
 
           const SizedBox(height: 18),
-          const Text('Select role',
+          const Text('Config user',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
           const SizedBox(height: 8),
 
@@ -257,7 +259,7 @@ class _Body extends StatelessWidget {
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 isExpanded: true,
                 items: const [
-                  'เลือกบทบาท',
+                  'Select role',
                   'Student',
                   'Teacher',
                   'Admin',
@@ -278,9 +280,9 @@ class _Body extends StatelessWidget {
             height: 48,
             child: ElevatedButton(
               onPressed: () {
-                if (selectedRole == 'เลือกบทบาท') {
+                if (selectedRole == 'select role') {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("กรุณาเลือกบทบาทก่อน")),
+                    const SnackBar(content: Text("Please select a role.")),
                   );
                   return;
                 }

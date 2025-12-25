@@ -39,18 +39,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _resetPassword() async {
-    final email = _user?.email;
-    if (email == null || email.isEmpty) {
-      AppToast.error(context, "No email found for this account.");
-      return;
-    }
-
-    try {
-      await _service.sendResetEmail(email);
-      AppToast.success(context, "Password reset link sent to $email");
-    } catch (e) {
-      AppToast.error(context, "Failed to send reset link: $e");
+  Future<void> _openChangePassword() async {
+    final result = await context.push('/change-password');
+    if (result == true && mounted) {
+      AppToast.success(context, "Password changed successfully.");
     }
   }
 
@@ -143,8 +135,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           SettingTile(
                             icon: Icons.lock_reset_outlined,
                             title: 'Change Password',
-                            subtitle: 'Send reset link to your email',
-                            onTap: _resetPassword,
+                            subtitle: 'Update your password securely',
+                            onTap: _openChangePassword,
                           ),
                           const SizedBox(height: 24),
                           CustomButton(

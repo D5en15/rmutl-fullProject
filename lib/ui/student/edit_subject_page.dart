@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class EditSubjectPage extends StatefulWidget {
   const EditSubjectPage({super.key, required this.enrollmentId});
@@ -70,7 +72,8 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
 
   Future<void> _loadUserId() async {
     final email = FirebaseAuth.instance.currentUser?.email;
-    if (email == null) return;
+    final authUid = FirebaseAuth.instance.currentUser?.uid;
+    if (email == null && authUid == null) return;
 
     final snap = await FirebaseFirestore.instance
         .collection("user")
@@ -79,7 +82,13 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
         .get();
 
     if (snap.docs.isNotEmpty) {
-      _userId = snap.docs.first.data()["user_id"].toString();
+      final doc = snap.docs.first;
+      final data = doc.data();
+      final rawId = (data["user_id"] ?? '').toString().trim();
+      _userId = rawId.isNotEmpty ? rawId : doc.id;
+      _loadEnrollment();
+    } else if (authUid != null) {
+      _userId = authUid;
       _loadEnrollment();
     }
   }
@@ -187,6 +196,8 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    await _triggerRecalc();
+
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Subject updated successfully')));
@@ -198,6 +209,8 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
         .collection('enrollment')
         .doc(widget.enrollmentId)
         .delete();
+
+    await _triggerRecalc();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -223,6 +236,20 @@ class _EditSubjectPageState extends State<EditSubjectPage> {
               style: const TextStyle(color: _label, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
       );
+
+  Future<void> _triggerRecalc() async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (email == null) return;
+    try {
+      await http.post(
+        Uri.parse("https://calculatestudentmetrics-hifpdjd5kq-uc.a.run.app"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email}),
+      );
+    } catch (_) {
+      // ถ้าคำนวณไม่ทัน server trigger จะประมวลผลเมื่อ enrollment เปลี่ยนแล้ว
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -17,16 +17,17 @@ class _ChatPageState extends State<ChatPage> {
   static const _primary = Color(0xFF3D5CFF);
   static const _bubbleBg = Color(0xFFF4F6FF);
 
+  String? _myUserId;
   String? otherUserName;
   String? otherUserImg;
 
   @override
   void initState() {
     super.initState();
-    _loadChatPartner();
+    _loadParticipants();
   }
 
-  Future<void> _loadChatPartner() async {
+  Future<void> _loadParticipants() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -38,6 +39,7 @@ class _ChatPageState extends State<ChatPage> {
 
     if (mySnap.docs.isEmpty) return;
     final myId = mySnap.docs.first['user_id'].toString();
+    _myUserId = myId;
 
     final chat = await FirebaseFirestore.instance
         .collection('chats')
@@ -77,6 +79,7 @@ class _ChatPageState extends State<ChatPage> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    if (_myUserId == null || _myUserId!.isEmpty) return;
 
     try {
       final userSnap = await FirebaseFirestore.instance
@@ -99,7 +102,7 @@ class _ChatPageState extends State<ChatPage> {
         'user_id': userId,
         'user_name': userName,
         'text': text.trim(),
-        'createdAt': DateTime.now(), // 🕒 local timestamp
+        'createdAt': FieldValue.serverTimestamp(), // 🕒 local timestamp
       });
 
       // ✅ อัปเดตข้อมูลห้อง (เวลา + ข้อความล่าสุด)
@@ -190,33 +193,18 @@ class _ChatPageState extends State<ChatPage> {
                           ? (data['createdAt'] as Timestamp).toDate()
                           : (data['createdAt'] as DateTime?);
 
-                      return FutureBuilder<QuerySnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('user')
-                            .where('user_id', isEqualTo: senderId)
-                            .limit(1)
-                            .get(),
-                        builder: (context, userSnap) {
-                          bool isMe = false;
-                          if (userSnap.hasData &&
-                              userSnap.data!.docs.isNotEmpty) {
-                            final email =
-                                userSnap.data!.docs.first['user_email'];
-                            isMe = email == user?.email;
-                          }
+                      final isMe =
+                          senderId != null && senderId.toString() == _myUserId;
 
-                          return Align(
-                            alignment: isMe
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: _Bubble(
-                              left: !isMe,
-                              label: senderName,
-                              text: text,
-                              time: time,
-                            ),
-                          );
-                        },
+                      return Align(
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: _Bubble(
+                          left: !isMe,
+                          label: senderName,
+                          text: text,
+                          time: time,
+                        ),
                       );
                     },
                   );

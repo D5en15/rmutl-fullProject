@@ -33,6 +33,7 @@ class ForumService {
     required String authorName,
     String? authorAvatar,
     Uint8List? imageBytes,
+    bool isAnnouncement = false,
   }) async {
     // หา post_id ล่าสุด
     final snap = await _db
@@ -63,7 +64,16 @@ class ForumService {
       'post_time': FieldValue.serverTimestamp(),
       'authorName': authorName,
       'authorAvatar': authorAvatar,
+      'is_announcement': isAnnouncement,
     });
+
+    if (isAnnouncement) {
+      await _sendAnnouncementNotification(
+        postId: formattedId,
+        title: title,
+        content: content,
+      );
+    }
   }
 
   /// ✅ อัปโหลดรูปภาพ (รองรับเว็บ)
@@ -120,5 +130,38 @@ class ForumService {
         .collection('post')
         .orderBy('post_time', descending: true)
         .snapshots();
+  }
+
+  Future<void> _sendAnnouncementNotification({
+    required String postId,
+    required String title,
+    required String content,
+  }) async {
+    final users = await _db.collection('user').get();
+    if (users.docs.isEmpty) return;
+
+    final snippet =
+        content.length > 120 ? '${content.substring(0, 120)}…' : content;
+
+    WriteBatch batch = _db.batch();
+    int ops = 0;
+    for (final doc in users.docs) {
+      final notifRef = doc.reference.collection('notifications').doc();
+      batch.set(notifRef, {
+        'title': title,
+        'body': snippet,
+        'post_id': postId,
+        'type': 'announcement',
+        'read': false,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+      ops++;
+      if (ops == 400) {
+        await batch.commit();
+        batch = _db.batch();
+        ops = 0;
+      }
+    }
+    if (ops > 0) await batch.commit();
   }
 }

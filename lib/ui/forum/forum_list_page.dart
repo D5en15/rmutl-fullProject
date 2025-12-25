@@ -409,6 +409,32 @@ class _PostCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              if (post.isAnnouncement)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: ForumListPage._primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.campaign_outlined,
+                          size: 14, color: ForumListPage._primary),
+                      SizedBox(width: 6),
+                      Text(
+                        'Teacher announcement',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: ForumListPage._primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Text(
                 post.title,
                 maxLines: 2,

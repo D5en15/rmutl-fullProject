@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../widgets/notification_bell.dart';
+
 /// ---------- Design tokens ----------
 class _T {
   static const primary = Color(0xFF3D5CFF);
@@ -94,6 +96,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        top: false,
         bottom: false,
         child: SingleChildScrollView(
           child: Column(
@@ -140,24 +143,18 @@ class _BlueHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return Container(
-      height: 188,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      height: 188 + topInset,
+      padding: EdgeInsets.fromLTRB(16, 18 + topInset, 16, 18),
       decoration: const BoxDecoration(color: _T.primary),
       child: Stack(
         alignment: Alignment.center,
         children: [
           Row(
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(24),
-                onTap: () =>
-                    context.go('/teacher/messages?tab=notifications'),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(Icons.notifications_none_rounded,
-                      color: Colors.white, size: 28),
-                ),
+              NotificationBell(
+                onTap: () => context.go('/teacher/messages?tab=notifications'),
               ),
               const SizedBox(width: 12),
               Expanded(

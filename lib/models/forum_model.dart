@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// ✅ ForumPost Model — ใช้แทนโพสต์แต่ละรายการ
+/// ForumPost model
 class ForumPost {
   final String id;
   final String title;
@@ -8,8 +8,9 @@ class ForumPost {
   final String authorId;
   final String authorName;
   final String? authorAvatar;
-  final String? imageUrl; // ✅ เพิ่มฟิลด์รูปภาพ
+  final String? imageUrl;
   final DateTime? createdAt;
+  final bool isAnnouncement;
 
   const ForumPost({
     required this.id,
@@ -20,9 +21,9 @@ class ForumPost {
     this.authorAvatar,
     this.imageUrl,
     this.createdAt,
+    this.isAnnouncement = false,
   });
 
-  /// ✅ แปลงจาก Firestore document
   factory ForumPost.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     return ForumPost(
@@ -32,20 +33,21 @@ class ForumPost {
       authorId: data['user_id']?.toString() ?? '',
       authorName: data['authorName'] ?? 'Unknown',
       authorAvatar: data['authorAvatar'],
-      imageUrl: data['post_img'], // ✅ รองรับรูปภาพ
+      imageUrl: data['post_img'],
+      isAnnouncement: (data['is_announcement'] ?? false) == true,
       createdAt: (data['post_time'] is Timestamp)
           ? (data['post_time'] as Timestamp).toDate()
           : null,
     );
   }
 
-  /// ✅ แปลงกลับเป็น Map สำหรับบันทึก Firestore
   Map<String, dynamic> toMap() => {
         'post_title': title,
         'post_content': content,
         'user_id': authorId,
         'authorName': authorName,
         'authorAvatar': authorAvatar,
+        'is_announcement': isAnnouncement,
         'post_img': imageUrl,
         'post_time': createdAt ?? FieldValue.serverTimestamp(),
       };

@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const {onRequest} = require("firebase-functions/v2/https");
 const nodemailer = require("nodemailer");
 
 const MAIL_USER = "nonteerapong8@gmail.com";
@@ -12,7 +12,7 @@ const mailTransporter = nodemailer.createTransport({
   },
 });
 
-exports.sendOtpEmail = functions.https.onRequest(async (req, res) => {
+exports.sendOtpEmail = onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");

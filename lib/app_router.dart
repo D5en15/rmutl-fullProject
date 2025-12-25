@@ -13,6 +13,7 @@ import 'ui/common/settings_page.dart';
 import 'ui/common/role_shell.dart';
 import 'ui/common/messages_page.dart';
 import 'ui/common/chat_page.dart';
+import 'ui/common/change_password_page.dart';
 
 // ---------- shared pages -----
 import 'ui/common/edit_profile_page.dart';
@@ -96,6 +97,7 @@ class AppRouter {
       // ---------- COMMON ----------
       GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+      GoRoute(path: '/change-password', builder: (_, __) => const ChangePasswordPage()),
       GoRoute(
           path: '/notifications',
           builder: (_, __) => const NotificationPage()),

@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../models/notification_item.dart';
+import '../../services/notification_service.dart';
 
 enum InboxTab { notifications, messages }
 
@@ -24,6 +26,7 @@ class _MessagesPageState extends State<MessagesPage> {
   final _searchCtrl = TextEditingController();
   InboxTab _currentTab = InboxTab.messages;
   bool _tabSynced = false;
+  final NotificationService _notifService = NotificationService();
 
   String _detectRole(BuildContext context) {
     final uri = GoRouterState.of(context).uri.toString();
@@ -81,7 +84,7 @@ class _MessagesPageState extends State<MessagesPage> {
 
     if (user == null) {
       return const Scaffold(
-        body: Center(child: Text("กรุณาเข้าสู่ระบบ")),
+        body: Center(child: Text("Please sign in")),
       );
     }
 
@@ -108,7 +111,7 @@ class _MessagesPageState extends State<MessagesPage> {
         ),
         body: Column(
           children: [
-            // 🔹 แถบเมนู
+            // Top tabs
             Row(
               children: [
                 Expanded(
@@ -128,14 +131,14 @@ class _MessagesPageState extends State<MessagesPage> {
               ],
             ),
 
-            // 🔍 ช่องค้นหา
+            // Search field (messages only)
             if (_currentTab == InboxTab.messages)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: TextField(
                   controller: _searchCtrl,
                   decoration: InputDecoration(
-                    hintText: 'ค้นหาผู้ใช้...',
+                    hintText: 'Search... ',
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     fillColor: const Color(0xFFF5F6FA),
@@ -161,8 +164,10 @@ class _MessagesPageState extends State<MessagesPage> {
                             key: const ValueKey('search_users'),
                             searchText: _searchCtrl.text.trim(),
                           ))
-                    : const _NotificationContent(
-                        key: ValueKey('notification_tab'),
+                    : _NotificationList(
+                        key: const ValueKey('notification_tab'),
+                        base: base,
+                        service: _notifService,
                       ),
               ),
             ),
@@ -173,9 +178,7 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 }
 
-//
-// ✅ แสดงเฉพาะคนที่เคยคุย (และต้องมีข้อความจริง ๆ)
-//
+// Recent chats list
 class _RecentChatsList extends StatelessWidget {
   final String currentEmail;
   const _RecentChatsList({super.key, required this.currentEmail});
@@ -193,7 +196,7 @@ class _RecentChatsList extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (userSnap.data!.docs.isEmpty) {
-          return const Center(child: Text("ไม่พบข้อมูลผู้ใช้"));
+          return const Center(child: Text("User not found"));
         }
 
         final currentUser = userSnap.data!.docs.first.data() as Map<String, dynamic>;
@@ -216,19 +219,23 @@ class _RecentChatsList extends StatelessWidget {
             }).toList();
 
             if (chats.isEmpty) {
-              return const Center(child: Text("ยังไม่มีการสนทนา"));
+              return const Center(child: Text("No chats yet"));
             }
 
             return ListView.builder(
               itemCount: chats.length,
               itemBuilder: (context, i) {
-                final chat = chats[i].data() as Map<String, dynamic>;
-                final chatId = chat['chats_id'];
-                final otherId = chat['participants0'] == userId
-                    ? chat['participants1']
-                    : chat['participants0'];
+                final raw = chats[i].data() as Map<String, dynamic>;
+                final chatId = (raw['chats_id'] ?? chats[i].id).toString();
+                final otherIdRaw = raw['participants0'] == userId
+                    ? raw['participants1']
+                    : raw['participants0'];
+                final otherId = otherIdRaw?.toString() ?? '';
+                if (chatId.isEmpty) return const SizedBox.shrink();
+                if (otherId.isEmpty) {
+                  return const SizedBox.shrink();
+                }
 
-                // ✅ ดึงข้อความล่าสุดของห้องนี้
                 return StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('chats')
@@ -238,13 +245,14 @@ class _RecentChatsList extends StatelessWidget {
                       .limit(1)
                       .snapshots(),
                   builder: (context, msgSnap) {
-                    if (!msgSnap.hasData ||
-                        msgSnap.data!.docs.isEmpty) {
-                      return const SizedBox.shrink(); // ❌ ไม่มีข้อความ ไม่แสดง
+                    if (!msgSnap.hasData || msgSnap.data!.docs.isEmpty) {
+                      // Skip chats with no messages yet
+                      return const SizedBox.shrink();
                     }
 
-                    final msg = msgSnap.data!.docs.first.data() as Map<String, dynamic>;
-                    final lastText = msg['text'] ?? '';
+                    final msg = msgSnap.data!.docs.first.data()
+                        as Map<String, dynamic>;
+                    final lastText = (msg['text'] ?? '').toString();
                     final senderId = msg['user_id'];
                     final createdAt =
                         (msg['createdAt'] as Timestamp?)?.toDate();
@@ -256,8 +264,7 @@ class _RecentChatsList extends StatelessWidget {
                           .limit(1)
                           .snapshots(),
                       builder: (context, otherSnap) {
-                        if (!otherSnap.hasData ||
-                            otherSnap.data!.docs.isEmpty) {
+                        if (!otherSnap.hasData || otherSnap.data!.docs.isEmpty) {
                           return const SizedBox.shrink();
                         }
 
@@ -266,21 +273,10 @@ class _RecentChatsList extends StatelessWidget {
                         final name = otherUser['user_fullname'] ?? 'Unknown';
                         final avatar = otherUser['user_img'];
 
-                        // ✅ ตรวจสอบว่าใครส่งข้อความล่าสุด
                         final isMine = senderId == userId;
-
-                        // ✅ ถ้าอีกฝั่งเป็นคนส่ง → ข้อความตัวหนา
-                        final msgStyle = TextStyle(
-                          fontWeight: isMine
-                              ? FontWeight.normal
-                              : FontWeight.bold,
-                          color: Colors.black87,
-                        );
-
-                        // ✅ ถ้าอีกฝั่งเป็นคนส่ง → ขึ้นต้นด้วยชื่อ (สั้นๆ)
-                        final displayText = isMine
-                            ? lastText
-                            : "${name.split(' ').first}: $lastText";
+                        final preview = lastText.isEmpty
+                            ? '…'
+                            : (isMine ? 'You: $lastText' : lastText);
 
                         return ListTile(
                           leading: CircleAvatar(
@@ -301,14 +297,19 @@ class _RecentChatsList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            displayText,
-                            style: msgStyle,
+                            preview,
+                            style: TextStyle(
+                              fontWeight: isMine
+                                  ? FontWeight.normal
+                                  : FontWeight.bold,
+                              color: Colors.black87,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           trailing: createdAt != null
                               ? Text(
-                                  "${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}",
+                                  "",
                                   style: const TextStyle(
                                       color: Colors.grey, fontSize: 12),
                                 )
@@ -328,9 +329,7 @@ class _RecentChatsList extends StatelessWidget {
   }
 }
 
-//
-// ✅ ค้นหาผู้ใช้ทั้งหมด
-//
+// Search user list
 class _SearchUserList extends StatelessWidget {
   final String searchText;
   const _SearchUserList({super.key, required this.searchText});
@@ -358,18 +357,29 @@ class _SearchUserList extends StatelessWidget {
           if (data['user_email'] == currentEmail) return false;
           final fullname =
               (data['user_fullname'] ?? '').toString().toLowerCase();
-          return fullname.contains(searchText.toLowerCase());
+          final email = (data['user_email'] ?? '').toString().toLowerCase();
+          final userId = (data['user_id'] ?? '').toString().toLowerCase();
+          final code = (data['user_code'] ?? '').toString().toLowerCase();
+          final q = searchText.toLowerCase();
+          return fullname.contains(q) ||
+              email.contains(q) ||
+              userId.contains(q) ||
+              code.contains(q);
         }).toList();
 
         if (filtered.isEmpty) {
-          return const Center(child: Text("ไม่พบผู้ใช้"));
+          return const Center(child: Text("No users found"));
         }
 
         return ListView.builder(
           itemCount: filtered.length,
           itemBuilder: (_, i) {
             final data = filtered[i].data() as Map<String, dynamic>;
-            final otherId = data['user_id'].toString();
+            final rawOtherId = data['user_id'];
+            if (rawOtherId == null || rawOtherId.toString().isEmpty) {
+              return const SizedBox.shrink();
+            }
+            final otherId = rawOtherId.toString();
             final name = data['user_fullname'] ?? 'Unknown';
             final avatar = data['user_img'];
 
@@ -393,6 +403,7 @@ class _SearchUserList extends StatelessWidget {
                     .get();
                 if (meSnap.docs.isEmpty) return;
                 final myId = meSnap.docs.first['user_id'].toString();
+                if (myId.isEmpty || otherId.isEmpty) return;
 
                 final cid = _chatId(myId, otherId);
                 final chatRef =
@@ -419,35 +430,64 @@ class _SearchUserList extends StatelessWidget {
   }
 }
 
-class _NotificationContent extends StatelessWidget {
-  const _NotificationContent({super.key});
+// Notifications tab
+class _NotificationList extends StatelessWidget {
+  const _NotificationList({
+    super.key,
+    required this.base,
+    required this.service,
+  });
+
+  final String base;
+  final NotificationService service;
+
+  String _timeAgo(DateTime? created) {
+    if (created == null) return 'Just now';
+    final diff = DateTime.now().difference(created);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return 'm ago';
+    if (diff.inHours < 24) return 'h ago';
+    return 'd ago';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.notifications_none_rounded,
-              size: 80, color: _inboxMuted),
-          SizedBox(height: 12),
-          Text(
-            "ไม่มีการแจ้งเตือน",
-            style: TextStyle(
-              color: _inboxMuted,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+    return StreamBuilder<List<NotificationItem>>(
+      stream: service.notificationsStream(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = snapshot.data!;
+        if (items.isEmpty) {
+          return const _EmptyPlaceholder();
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, index) {
+            final item = items[index];
+            return _NotificationTile(
+              item: item,
+              timeAgo: _timeAgo(item.createdAt),
+              onTap: () async {
+                await service.markAsRead(item.id);
+                if (!context.mounted) return;
+                if (item.postId != null && item.postId!.isNotEmpty) {
+                  context.push('/forum/');
+                }
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
 
-//
-// ✅ ปุ่ม Tab บนสุด
-//
+// Tab button
 class _TabButton extends StatelessWidget {
   const _TabButton({
     required this.text,
@@ -486,6 +526,126 @@ class _TabButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({
+    required this.item,
+    required this.timeAgo,
+    required this.onTap,
+  });
+
+  final NotificationItem item;
+  final String timeAgo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUnread = !item.read;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x11000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8EDFF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.campaign_outlined,
+                  color: _inboxPrimary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontWeight:
+                          isUnread ? FontWeight.w800 : FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.body,
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 13.5,
+                      fontWeight:
+                          isUnread ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time,
+                          size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeAgo,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (isUnread)
+              const Padding(
+                padding: EdgeInsets.only(left: 8, top: 6),
+                child: Icon(Icons.circle,
+                    color: _inboxPrimary, size: 10),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPlaceholder extends StatelessWidget {
+  const _EmptyPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.notifications_none_rounded,
+              size: 80, color: _inboxMuted),
+          SizedBox(height: 12),
+          Text(
+            "No notifications yet",
+            style: TextStyle(
+              color: _inboxMuted,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

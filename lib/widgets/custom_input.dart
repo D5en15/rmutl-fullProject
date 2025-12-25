@@ -9,6 +9,8 @@ class CustomInput extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
   final void Function()? onSubmitted;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
 
   const CustomInput({
     super.key,
@@ -20,6 +22,8 @@ class CustomInput extends StatelessWidget {
     this.keyboardType,
     this.validator,
     this.onSubmitted,
+    this.focusNode,
+    this.onChanged,
   });
 
   @override
@@ -48,10 +52,12 @@ class CustomInput extends StatelessWidget {
         // 🟩 ช่องกรอกข้อมูล
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           obscureText: obscure,
           readOnly: readOnly,
           keyboardType: keyboardType,
           validator: validator,
+          onChanged: onChanged,
           onFieldSubmitted: (_) => onSubmitted?.call(),
           decoration: InputDecoration(
             border: buildBorder(const Color(0xFFE0E0E0)),

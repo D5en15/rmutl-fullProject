@@ -1,14 +1,16 @@
+﻿import 'dart:io' show File;
 import 'dart:typed_data';
-import 'dart:io' show File;
-import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/forum_service.dart';
-import '../../models/forum_model.dart';
+
+const _announcementColor = Color(0xFF3D5CFF);
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({super.key});
@@ -20,14 +22,17 @@ class CreatePostPage extends StatefulWidget {
 class _CreatePostPageState extends State<CreatePostPage> {
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
-  final _service = ForumService(); // ✅ ใช้ ForumService ที่แยกออกไปแล้ว
+  final _service = ForumService();
 
   bool _loading = false;
   String? _fullname;
   String? _avatar;
   String? _userId;
+  String? _role;
+  bool _isAnnouncement = false;
+  Uint8List? _imageBytes;
 
-  Uint8List? _webImage; // ✅ เก็บภาพที่เลือก (รองรับเว็บด้วย)
+  bool get _isTeacher => (_role ?? '').toLowerCase() == 'teacher';
 
   @override
   void initState() {
@@ -35,7 +40,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _loadUser();
   }
 
-  /// ✅ โหลดข้อมูลผู้ใช้จาก Firestore
   Future<void> _loadUser() async {
     final user = FirebaseAuth.instance.currentUser;
     final fallbackUid = user?.uid;
@@ -53,15 +57,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
         setState(() {
           _fullname = data['user_fullname'] ?? user.email ?? 'Unknown';
           _avatar = data['user_img'];
-          _userId = data['user_id'].toString();
+          _userId = data['user_id']?.toString();
+          _role = data['user_role']?.toString();
         });
         return;
       }
     } catch (_) {
-      // ignore lookup issues and fallback below
+      // ignore and fallback
     }
 
-    // Fallback to auth uid if user doc not found
     if (fallbackUid != null) {
       setState(() {
         _fullname = user.email ?? 'Unknown';
@@ -71,34 +75,34 @@ class _CreatePostPageState extends State<CreatePostPage> {
     }
   }
 
-  /// ✅ เลือกรูปภาพ (รองรับเว็บ)
   Future<void> _pickImage() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         withData: true,
       );
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
-        Uint8List? bytes = file.bytes;
-        if (bytes == null && !kIsWeb && file.path != null) {
-          try {
-            bytes = await File(file.path!).readAsBytes();
-          } catch (_) {
-            bytes = null;
-          }
-        }
-        if (bytes != null) {
-          setState(() => _webImage = bytes);
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not read image file.')),
-          );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final picked = result.files.first;
+      Uint8List? bytes = picked.bytes;
+      if (bytes == null && !kIsWeb && picked.path != null) {
+        try {
+          bytes = await File(picked.path!).readAsBytes();
+        } catch (_) {
+          bytes = null;
         }
       }
+      if (bytes == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read image file.')),
+        );
+        return;
+      }
+      setState(() => _imageBytes = bytes);
     } catch (e) {
-      debugPrint('❌ Error selecting image: $e');
+      debugPrint('Error selecting image: $e');
     }
   }
 
@@ -145,7 +149,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🧑‍💻 Header (Avatar + Name)
             Row(
               children: [
                 CircleAvatar(
@@ -159,14 +162,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  _fullname ?? 'Loading...',
+                  _fullname ?? 'Loading... ',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-
-            // 📝 Title field — ไม่มีกรอบ และตัดบรรทัดอัตโนมัติ
             TextField(
               controller: _titleCtrl,
               onChanged: (_) => setState(() {}),
@@ -182,33 +183,36 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
             ),
             const SizedBox(height: 8),
-
-            // ✏️ Content field
             TextField(
               controller: _contentCtrl,
               maxLines: null,
               minLines: 4,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
-                hintText: 'Write something…',
+                hintText: 'Write something...',
                 border: InputBorder.none,
               ),
             ),
             const SizedBox(height: 4),
-
-            // 🖼 Preview รูปภาพ
-            if (_webImage != null) ...[
+            if (_isTeacher) ...[
+              _AnnouncementToggle(
+                value: _isAnnouncement,
+                onChanged: (val) => setState(() => _isAnnouncement = val),
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (_imageBytes != null) ...[
               const SizedBox(height: 6),
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: GestureDetector(
-                      onTap: () => _showImagePreview(_webImage!),
+                      onTap: () => _showImagePreview(_imageBytes!),
                       child: AspectRatio(
                         aspectRatio: 3 / 4,
                         child: Image.memory(
-                          _webImage!,
+                          _imageBytes!,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -223,7 +227,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       child: IconButton(
                         icon: const Icon(Icons.close,
                             color: Colors.white, size: 14),
-                        onPressed: () => setState(() => _webImage = null),
+                        onPressed: () => setState(() => _imageBytes = null),
                       ),
                     ),
                   ),
@@ -231,8 +235,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
             ],
             const SizedBox(height: 10),
-
-            // 📸 ปุ่มเพิ่มรูปภาพ (ชิดซ้ายด้านล่าง)
             Align(
               alignment: Alignment.centerLeft,
               child: Row(
@@ -245,7 +247,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    "Add image",
+                    'Add image',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -257,17 +259,15 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  /// ✅ เมื่อกดโพสต์
   Future<void> _submit(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _userId == null) {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null || _userId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please sign in before posting')),
       );
       return;
     }
 
-    // One post per day per user
     DateTime? lastTime;
     try {
       final latest = await _service.db
@@ -281,14 +281,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
             (latest.docs.first.data()['post_time'] as Timestamp?)?.toDate();
       }
     } catch (_) {
-      // Fallback without orderBy (no index required)
       final fallback = await _service.db
           .collection('post')
           .where('user_id', isEqualTo: _userId)
           .get();
       for (final d in fallback.docs) {
         final t = (d.data()['post_time'] as Timestamp?)?.toDate();
-        if (t != null && (lastTime == null || t.isAfter(lastTime!))) {
+        if (t != null && (lastTime == null || t.isAfter(lastTime))) {
           lastTime = t;
         }
       }
@@ -301,13 +300,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (remaining > Duration.zero) {
         final hours = remaining.inHours;
         final minutes = remaining.inMinutes.remainder(60);
-        final countdown = hours > 0
-            ? "${hours}h ${minutes.toString().padLeft(2, '0')}m"
-            : "${minutes}m";
+        final countdown =
+            hours > 0 ? '${hours}h ${minutes.toString().padLeft(2, '0')}m' : '${minutes}m';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'You can post again in $countdown. Please wait 24 hours between posts.'),
+              'You can post again in $countdown. Please wait 24 hours between posts.',
+            ),
           ),
         );
         return;
@@ -317,14 +316,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
     setState(() => _loading = true);
 
     try {
-      // ✅ ใช้ ForumService ที่แยกไว้
       await _service.createPost(
         userId: _userId!,
         title: _titleCtrl.text.trim(),
         content: _contentCtrl.text.trim(),
-        authorName: _fullname ?? user.email ?? 'Unknown',
+        authorName: _fullname ?? authUser.email ?? 'Unknown',
         authorAvatar: _avatar,
-        imageBytes: _webImage,
+        imageBytes: _imageBytes,
+        isAnnouncement: _isTeacher && _isAnnouncement,
       );
 
       if (!mounted) return;
@@ -372,12 +371,65 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 border: Border.all(color: Colors.white, width: 1.2),
               ),
               child: IconButton(
-                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                constraints:
+                    const BoxConstraints.tightFor(width: 40, height: 40),
                 padding: EdgeInsets.zero,
                 onPressed: () => Navigator.of(dialogCtx).pop(),
                 icon: const Icon(Icons.close, color: Colors.white, size: 22),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementToggle extends StatelessWidget {
+  const _AnnouncementToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7FF),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Send as announcement',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Notify every user about this post.',
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: _announcementColor,
           ),
         ],
       ),

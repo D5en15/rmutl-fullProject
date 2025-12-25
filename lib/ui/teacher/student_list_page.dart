@@ -46,9 +46,11 @@ class _StudentListPageState extends State<StudentListPage> {
 
       final data = snap.docs.map((d) {
         final u = d.data();
+        final rawId = (u['user_id'] ?? '').toString().trim();
+        final resolvedUserId = rawId.isNotEmpty ? rawId : d.id;
         return {
           'id': d.id,
-          'user_id': u['user_id'] ?? '',
+          'user_id': resolvedUserId,
           'user_fullname': u['user_fullname'] ?? 'Unknown',
           'user_email': u['user_email'] ?? '',
           'user_code': u['user_code'] ?? '',
@@ -73,11 +75,22 @@ class _StudentListPageState extends State<StudentListPage> {
   @override
   Widget build(BuildContext context) {
     final q = _controller.text.toLowerCase();
+    String _yearKey(Map<String, dynamic> student) {
+      final primary =
+          (student['user_id'] ?? '').toString().trim();
+      final fallback =
+          (student['user_code'] ?? '').toString().trim();
+      final candidate = primary.isNotEmpty ? primary : fallback;
+      if (candidate.isEmpty) return '';
+      final digits = candidate.replaceAll(RegExp(r'[^0-9]'), '');
+      return digits.isNotEmpty ? digits : candidate;
+    }
+
     final byYear = (_selectedYear == null || _viewAll)
         ? _students
         : _students.where((s) {
-            final uid = (s['user_id'] ?? '').toString();
-            return uid.length >= 2 && uid.startsWith(_selectedYear!);
+            final key = _yearKey(s);
+            return key.length >= 2 && key.startsWith(_selectedYear!);
           }).toList();
 
     final filtered = q.isEmpty
@@ -95,10 +108,18 @@ class _StudentListPageState extends State<StudentListPage> {
         : 'Showing all students';
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Student List'),
-        backgroundColor: const Color(0xFF3D5CFF),
-        foregroundColor: Colors.white,
+        title: const Text(
+          'Student List',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

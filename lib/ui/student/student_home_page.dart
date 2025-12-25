@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../widgets/notification_bell.dart';
 
 class StudentHomePage extends StatelessWidget {
   const StudentHomePage({super.key});
@@ -20,6 +21,37 @@ class StudentHomePage extends StatelessWidget {
     if (user == null) throw Exception("Not logged in");
 
     final email = user.email;
+    if (email == null) throw Exception("Email not found");
+
+    // 1) หา user doc
+    final userSnap = await FirebaseFirestore.instance
+        .collection('user')
+        .where('user_email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (userSnap.docs.isEmpty) {
+      throw Exception("User not found in database");
+    }
+    final userDoc = userSnap.docs.first;
+
+    // 2) ลองอ่าน report ที่ฟังก์ชันเขียนไว้
+    final reportRef = userDoc.reference.collection('app').doc('report');
+    final reportSnap = await reportRef.get();
+    if (reportSnap.exists && reportSnap.data() != null) {
+      return reportSnap.data()!;
+    }
+
+    // 3) ถ้าไม่มี report ให้เรียกฟังก์ชันคำนวณ แล้วอ่านซ้ำ
+    final fresh = await _invokeMetricsFunction(email);
+    final reportAfter = await reportRef.get();
+    if (reportAfter.exists && reportAfter.data() != null) {
+      return reportAfter.data()!;
+    }
+    return fresh;
+  }
+
+  Future<Map<String, dynamic>> _invokeMetricsFunction(String email) async {
     final url = Uri.parse(
       "https://calculatestudentmetrics-hifpdjd5kq-uc.a.run.app",
     );
@@ -46,7 +78,9 @@ class StudentHomePage extends StatelessWidget {
         .limit(1)
         .get();
     if (qs.docs.isEmpty) return null;
-    return qs.docs.first.data();
+    final data = qs.docs.first.data();
+    data['docId'] = qs.docs.first.id;
+    return data;
   }
 
   @override
@@ -91,15 +125,33 @@ class StudentHomePage extends StatelessWidget {
                         ? snapshot.data![1] as Map<String, dynamic>
                         : null;
 
-                final gpa = (metrics['gpa'] as num?)?.toDouble() ?? 0;
-                final gpaBySemester =
-                    Map<String, dynamic>.from(metrics['gpaBySemester'] ?? {});
-                final subploScores =
-                    Map<String, dynamic>.from(metrics['subploScores'] ?? {});
-                final ploScores =
-                    Map<String, dynamic>.from(metrics['ploScores'] ?? {});
-                final careerScores =
-                    List<Map<String, dynamic>>.from(metrics['careerScores'] ?? []);
+                final gpa = (metrics['field_gpa'] ?? metrics['gpa'] ?? 0) is num
+                    ? (metrics['field_gpa'] ?? metrics['gpa'] ?? 0).toDouble()
+                    : 0.0;
+                final gpaBySemester = Map<String, dynamic>.from(
+                  metrics['field_gpaBySemester'] ??
+                      metrics['gpaBySemester'] ??
+                      {},
+                );
+                final subploScores = Map<String, dynamic>.from(
+                  metrics['field_subploScores'] ??
+                      metrics['subploScores'] ??
+                      {},
+                );
+                final ploScores = Map<String, dynamic>.from(
+                  metrics['field_ploScores'] ??
+                      metrics['ploScores'] ??
+                      {},
+                );
+                final careerScores = List<Map<String, dynamic>>.from(
+                  metrics['field_careerScores'] ??
+                      metrics['careerScores'] ??
+                      [],
+                )..sort((a, b) {
+                    final pa = (a['percent'] as num?)?.toDouble() ?? 0;
+                    final pb = (b['percent'] as num?)?.toDouble() ?? 0;
+                    return pb.compareTo(pa); // มาก -> น้อย
+                  });
                 final avatarUrl =
                     (userProfile?['user_img'] as String?)?.trim();
 
@@ -243,17 +295,8 @@ class _BlueHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(24),
+          NotificationBell(
             onTap: () => context.go('/student/messages?tab=notifications'),
-            child: const Padding(
-              padding: EdgeInsets.all(4.0),
-              child: Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white,
-                size: 30,
-              ),
-            ),
           ),
           const SizedBox(width: 12),
           Expanded(

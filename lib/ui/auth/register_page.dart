@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/register_service.dart';
 import '../../widgets/custom_input.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/otp_button.dart';
-import '../../widgets/app_toast.dart'; // ✅ ระบบแจ้งเตือนแบบ Toast
+import '../../widgets/app_toast.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -18,6 +19,10 @@ class _RegisterPageState extends State<RegisterPage> {
   final _form = GlobalKey<FormState>();
 
   final _studentId = TextEditingController();
+  final _studentIdFocus = FocusNode();
+  String? _studentIdError;
+  bool _checkingId = false;
+
   final _fullname = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -28,7 +33,67 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _otpSent = false;
   bool _otpVerified = false;
 
-  /// 🔹 ส่ง OTP
+  @override
+  void initState() {
+    super.initState();
+    _studentIdFocus.addListener(_handleStudentIdFocus);
+  }
+
+  @override
+  void dispose() {
+    _studentIdFocus.removeListener(_handleStudentIdFocus);
+    _studentIdFocus.dispose();
+    _studentId.dispose();
+    _fullname.dispose();
+    _email.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    _otp.dispose();
+    super.dispose();
+  }
+
+  void _handleStudentIdFocus() {
+    if (!_studentIdFocus.hasFocus) {
+      _validateStudentIdUnique(showToast: true);
+    }
+  }
+
+  Future<bool> _validateStudentIdUnique({bool showToast = false}) async {
+    final id = _studentId.text.trim();
+    if (id.isEmpty) {
+      setState(() => _studentIdError = 'Student ID is required.');
+      return false;
+    }
+    setState(() {
+      _checkingId = true;
+      _studentIdError = null;
+    });
+    try {
+      final snap =
+          await FirebaseFirestore.instance
+              .collection('user')
+              .where('user_id', isEqualTo: id)
+              .limit(1)
+              .get();
+      final exists = snap.docs.isNotEmpty;
+      setState(() {
+        _studentIdError = exists ? 'This Student ID is already in use.' : null;
+      });
+      if (exists && showToast) {
+        AppToast.error(context, 'This Student ID is already in use.');
+      }
+      return !exists;
+    } catch (e) {
+      setState(() => _studentIdError = 'Could not verify Student ID.');
+      if (showToast) {
+        AppToast.error(context, 'Could not verify Student ID: $e');
+      }
+      return false;
+    } finally {
+      setState(() => _checkingId = false);
+    }
+  }
+
   Future<void> _getOtp() async {
     final email = _email.text.trim().toLowerCase();
     if (email.isEmpty) {
@@ -51,7 +116,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  /// 🔹 ตรวจสอบ OTP
   Future<void> _verifyOtp() async {
     final email = _email.text.trim().toLowerCase();
     final code = _otp.text.trim();
@@ -77,7 +141,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  /// 🔹 สมัครสมาชิก
   Future<void> _register() async {
     if (!(_form.currentState?.validate() ?? false)) return;
     if (!_otpVerified) {
@@ -85,10 +148,14 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
+    final studentId = _studentId.text.trim();
+    final ok = await _validateStudentIdUnique(showToast: true);
+    if (!ok) return;
+
     setState(() => _loading = true);
     try {
       await _service.register(
-        studentId: _studentId.text.trim(),
+        studentId: studentId,
         fullname: _fullname.text.trim(),
         email: _email.text.trim().toLowerCase(),
         password: _password.text,
@@ -132,17 +199,6 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   @override
-  void dispose() {
-    _studentId.dispose();
-    _fullname.dispose();
-    _email.dispose();
-    _password.dispose();
-    _confirm.dispose();
-    _otp.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -178,28 +234,38 @@ class _RegisterPageState extends State<RegisterPage> {
               children: [
                 CustomInput(
                   controller: _studentId,
+                  focusNode: _studentIdFocus,
                   label: 'Student ID',
-                  validator: (v) =>
-                      _requiredValidator(v, 'Student ID is required.'),
+                  onChanged: (_) {
+                    if (_studentIdError != null) {
+                      setState(() => _studentIdError = null);
+                    }
+                  },
+                  onSubmitted: () => _validateStudentIdUnique(showToast: true),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Student ID is required.';
+                    }
+                    if (_studentIdError != null) return _studentIdError;
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 CustomInput(
                   controller: _fullname,
                   label: 'Full name',
-                  validator: (v) =>
-                      _requiredValidator(v, 'Full name is required.'),
+                  validator:
+                      (v) => _requiredValidator(v, 'Full name is required.'),
                 ),
                 const SizedBox(height: 16),
                 CustomInput(
                   controller: _email,
                   label: 'Email',
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                      _requiredValidator(v, 'Email is required.'),
+                  validator: (v) => _requiredValidator(v, 'Email is required.'),
                 ),
                 const SizedBox(height: 16),
 
-                /// 🔹 ช่อง OTP + ปุ่ม
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -238,9 +304,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 20),
 
-                /// 🔹 ปุ่มสมัครสมาชิก
                 CustomButton(
-                  text: 'Create Account',
+                  text: _checkingId ? 'Checking ID...' : 'Create Account',
                   loading: _loading,
                   onPressed: _register,
                 ),

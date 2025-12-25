@@ -1,7 +1,7 @@
+﻿import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const _primary = Color(0xFF3D5CFF);
@@ -19,6 +19,7 @@ class StudentDetailPage extends StatefulWidget {
 class _StudentDetailPageState extends State<StudentDetailPage> {
   Map<String, dynamic>? studentData;
   Map<String, dynamic>? metricsData;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -26,103 +27,124 @@ class _StudentDetailPageState extends State<StudentDetailPage> {
     _loadStudentDetail();
   }
 
-  /// ✅ ดึงข้อมูลนักศึกษาจาก Firestore + Cloud Function เดียวกับ student_home_page.dart
   Future<void> _loadStudentDetail() async {
     try {
       final userDoc = await FirebaseFirestore.instance
           .collection('user')
           .doc(widget.studentId)
           .get();
-
-      if (!userDoc.exists) throw Exception("ไม่พบนักศึกษาในระบบ");
-
+      if (!userDoc.exists) {
+        throw Exception('Student not found');
+      }
       final user = userDoc.data()!;
-      final email = user['user_email'];
+      final email = (user['user_email'] ?? '').toString();
+      final reportRef = userDoc.reference.collection('app').doc('report');
+      Map<String, dynamic>? report;
 
-      final url = Uri.parse(
-        "https://calculatestudentmetrics-hifpdjd5kq-uc.a.run.app",
-      );
-
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email}),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception("Error: ${response.body}");
+      final snap = await reportRef.get();
+      if (snap.exists && snap.data() != null) {
+        report = snap.data()!;
+      } else if (email.isNotEmpty) {
+        // fallback: trigger calc and try again
+        try {
+          await http.post(
+            Uri.parse('https://calculatestudentmetrics-hifpdjd5kq-uc.a.run.app'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email}),
+          );
+          final snap2 = await reportRef.get();
+          if (snap2.exists && snap2.data() != null) {
+            report = snap2.data()!;
+          }
+        } catch (_) {}
       }
 
       setState(() {
         studentData = user;
-        metricsData = jsonDecode(response.body);
+        metricsData = report ?? {};
+        _loading = false;
       });
     } catch (e) {
-      debugPrint("🔥 Error: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("เกิดข้อผิดพลาด: $e")),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load student: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (studentData == null || metricsData == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (studentData == null) {
+      return const Scaffold(body: Center(child: Text('Student not found')));
     }
 
     final user = studentData!;
-    final metrics = metricsData!;
+    final metrics = metricsData ?? {};
 
-    final name = user['user_fullname'] ?? "Unknown";
-    final email = user['user_email'] ?? "";
-    final code = user['user_code'] ?? "-";
-    final room = user['user_class'] ?? "-";
-    final gpa = (metrics['gpa'] as num?)?.toDouble() ?? 0;
-    final gpaBySemester =
-        Map<String, dynamic>.from(metrics['gpaBySemester'] ?? {});
-    final subploScores =
-        Map<String, dynamic>.from(metrics['subploScores'] ?? {});
-    final ploScores =
-        Map<String, dynamic>.from(metrics['ploScores'] ?? {});
+    final name = (user['user_fullname'] ?? 'Unknown').toString();
+    final email = (user['user_email'] ?? '').toString();
+    final code = (user['user_code'] ?? '-').toString();
+    final avatar = (user['user_img'] ?? '').toString();
 
-    // ✅ ทักษะเด่น
+    final gpa = _asDouble(metrics['field_gpa'] ?? metrics['gpa'] ?? 0);
+    final gpaBySemester = Map<String, dynamic>.from(
+      metrics['field_gpaBySemester'] ?? metrics['gpaBySemester'] ?? {},
+    );
+    final subploScores = Map<String, dynamic>.from(
+      metrics['field_subploScores'] ?? metrics['subploScores'] ?? {},
+    );
+    final ploScores = Map<String, dynamic>.from(
+      metrics['field_ploScores'] ?? metrics['ploScores'] ?? {},
+    );
+    final careerScores = List<Map<String, dynamic>>.from(
+      metrics['field_careerScores'] ?? metrics['careerScores'] ?? [],
+    );
+
+    // Top PLO
+    String topPloDesc = 'No description available';
+    double topPloValue = -1;
+    ploScores.forEach((key, val) {
+      final score = _asDouble(val['score'] ?? 0);
+      if (key.toUpperCase() == 'PLO1') return;
+      if (score > topPloValue) {
+        topPloValue = score;
+        topPloDesc = (val['description'] ?? key).toString();
+      }
+    });
+
+    // Skill strengths from subPLO
     List<Map<String, dynamic>> skills = [];
     subploScores.forEach((key, val) {
-      final double score = (val["score"] as num).toDouble();
-      final desc = val["description"] ?? key;
+      final score = _asDouble(val['score'] ?? 0);
       final percent = ((score / 4.0) * 100).clamp(0, 100).toInt();
       skills.add({
-        "title": "$key: $desc",
-        "percent": percent,
+        'title': (val['description'] ?? key).toString(),
+        'percent': percent,
       });
     });
     skills.sort((a, b) => (b['percent'] as int).compareTo(a['percent'] as int));
     skills = skills.take(5).toList();
 
-    // ✅ PLO เด่นสุด
-    String topPloDesc = "No description available";
-    double topPloValue = -1;
-
-    ploScores.forEach((key, val) {
-      final double score = (val["score"] as num).toDouble();
-      if (key.toUpperCase() == "PLO1") return;
-      if (score > topPloValue) {
-        topPloValue = score;
-        final desc = val["description"] ?? key;
-        topPloDesc = "$desc (${score.toStringAsFixed(2)}/4.00)";
-      }
-    });
+    final sortedCareers = List<Map<String, dynamic>>.from(careerScores)
+      ..sort((a, b) => (_asDouble(b['percent']) ).compareTo(_asDouble(a['percent'])));
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Student Detail'),
-        backgroundColor: _primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Student Detail',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+        ),
       ),
       body: SafeArea(
         bottom: false,
@@ -131,41 +153,75 @@ class _StudentDetailPageState extends State<StudentDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const CircleAvatar(
-                radius: 40,
-                backgroundColor: Color(0xFFFFE3B5),
-                child: Icon(Icons.person, size: 42, color: Colors.black54),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 38,
+                    backgroundColor: const Color(0xFFE8EDFF),
+                    backgroundImage:
+                        avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                    child: avatar.isEmpty
+                        ? const Icon(Icons.person, size: 34, color: Colors.black54)
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 20),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text('ID: $code',
+                      style: const TextStyle(color: _muted),
+                      textAlign: TextAlign.center),
+                  Text(email,
+                      style: const TextStyle(color: _muted),
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () {},
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Message'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text(name,
-                  textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-              const SizedBox(height: 6),
-              Text('$code  •  $room\n$email',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: _muted)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              // ✅ GPA Card
               _GpaCard(gpa: gpa),
               const SizedBox(height: 16),
 
-              // ✅ Grade Progress Chart
               _GradeProgressCard(gpaBySemester: gpaBySemester),
               const SizedBox(height: 16),
 
-              // ✅ Top Strength
               _TopStrengthChip(description: topPloDesc),
               const SizedBox(height: 16),
 
-              // ✅ Skill Strengths
               _SkillStrengths(skills: skills),
+              const SizedBox(height: 16),
+
+              _RecommendedCareers(
+                careers: sortedCareers,
+                subploScores: subploScores,
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  double _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
   }
 }
 
@@ -219,87 +275,49 @@ class _GradeProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final semesters = gpaBySemester.keys.toList()..sort();
+    final entries = gpaBySemester.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
 
-    final values = semesters.map((s) {
-      final val = gpaBySemester[s];
-      return val is Map && val.containsKey('gpa')
-          ? (val['gpa'] as num).toDouble()
-          : (val as num).toDouble();
-    }).toList();
+    final mapped = entries
+        .map((e) => {
+              'label': e.key,
+              'value': (e.value is Map && (e.value as Map).containsKey('gpa'))
+                  ? ((e.value as Map)['gpa'] as num).toDouble()
+                  : (e.value as num?)?.toDouble() ?? 0,
+            })
+        .toList();
+    final values = mapped.map((e) => e['value'] as double).toList();
+    final labels = mapped.map((e) => e['label'] as String).toList();
 
-    final subjects = <Map<String, dynamic>>[];
-    for (var s in semesters) {
-      final semData = gpaBySemester[s];
-      if (semData is Map && semData['subjects'] != null) {
-        for (var sub in List.from(semData['subjects'])) {
-          subjects.add({
-            "semester": s,
-            "subject": sub["name"] ?? "-",
-            "grade": sub["grade"] ?? "-",
-          });
-        }
-      }
-    }
-
-    return PhysicalModel(
-      color: Colors.white,
-      elevation: 2,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Grade Progress',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 220,
-              width: double.infinity,
-              child: CustomPaint(painter: _LineChartPainter(values, semesters)),
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            const Text('Subjects & Grades',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 8),
-            ...subjects.map((s) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          s["semester"],
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 5,
-                        child: Text(s["subject"],
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                      Expanded(
-                        flex: 1,
-                        child: Text(
-                          s["grade"].toString(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.black87),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      child: PhysicalModel(
+        color: Colors.white,
+        elevation: 2,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Grade Progress',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 220,
+                child: CustomPaint(
+                  painter: _LineChartPainter(values, labels),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// 📊 Line Chart Painter
 class _LineChartPainter extends CustomPainter {
   final List<double> data;
   final List<String> labels;
@@ -309,10 +327,11 @@ class _LineChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const maxY = 4.0;
     const minY = 0.0;
-
-    final chartHeight = size.height - 30;
-    final chartWidth = size.width - 30;
-    const offsetLeft = 30.0;
+    const double paddingLeft = 40;
+    const double paddingRight = 20;
+    const double paddingBottom = 40;
+    final chartWidth = size.width - paddingLeft - paddingRight;
+    final chartHeight = size.height - paddingBottom;
 
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
@@ -323,11 +342,10 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     final dotPaint = Paint()..color = _primary;
 
-    // 🔹 เส้นแนวนอน (เกรด 0–4)
     for (int i = 0; i <= 4; i++) {
       final y = chartHeight - (i / 4) * chartHeight;
       canvas.drawLine(
-          Offset(offsetLeft, y), Offset(offsetLeft + chartWidth, y), gridPaint);
+          Offset(paddingLeft, y), Offset(paddingLeft + chartWidth, y), gridPaint);
       final tp = TextPainter(
         text: TextSpan(
           text: i.toString(),
@@ -335,50 +353,53 @@ class _LineChartPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(offsetLeft - tp.width - 4, y - 6));
+      tp.paint(canvas, Offset(paddingLeft - tp.width - 6, y - 6));
     }
 
-    // 🔹 เส้นกราฟเกรด
-    final dx = chartWidth / (data.length - 1);
+    if (data.isEmpty) return;
+    final dx = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
     final path = Path();
+
     for (int i = 0; i < data.length; i++) {
-      final x = offsetLeft + i * dx;
+      final x = paddingLeft + i * dx;
       final y = chartHeight - ((data[i] - minY) / (maxY - minY)) * chartHeight;
       if (i == 0) path.moveTo(x, y);
       else path.lineTo(x, y);
       canvas.drawCircle(Offset(x, y), 3, dotPaint);
 
-      // แสดงค่าตัวเลขเกรดบนจุด
-      final tp = TextPainter(
+      final tpVal = TextPainter(
         text: TextSpan(
           text: data[i].toStringAsFixed(2),
           style: const TextStyle(fontSize: 10, color: _primary),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, y - 14));
-    }
-    canvas.drawPath(path, linePaint);
+      tpVal.paint(canvas, Offset(x - tpVal.width / 2, y - 15));
 
-    // 🔹 Label ปี/เทอม
-    for (int i = 0; i < labels.length; i++) {
-      final x = offsetLeft + i * dx;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: labels[i],
-          style: const TextStyle(fontSize: 10, color: Colors.black87),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, chartHeight + 4));
+      if (i < labels.length) {
+        final tpLbl = TextPainter(
+          text: TextSpan(
+            text: labels[i],
+            style: const TextStyle(fontSize: 10, color: Colors.black87),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        canvas.save();
+        canvas.translate(x, chartHeight + 24);
+        canvas.rotate(-0.785398); // -45 deg
+        tpLbl.paint(canvas, Offset(-tpLbl.width / 2, 0));
+        canvas.restore();
+      }
     }
+
+    canvas.drawPath(path, linePaint);
   }
 
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) => true;
 }
 
-/// 🔥 Top Strength
 class _TopStrengthChip extends StatelessWidget {
   const _TopStrengthChip({required this.description});
   final String description;
@@ -405,7 +426,6 @@ class _TopStrengthChip extends StatelessWidget {
   }
 }
 
-/// 🧠 Skill Strengths
 class _SkillStrengths extends StatelessWidget {
   const _SkillStrengths({required this.skills});
   final List<Map<String, dynamic>> skills;
@@ -425,8 +445,8 @@ class _SkillStrengths extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             const SizedBox(height: 10),
             ...skills.map((e) {
-              final title = e['title'];
-              final percent = e['percent'];
+              final title = e['title'] as String? ?? '';
+              final percent = (e['percent'] as num?)?.toInt() ?? 0;
               final value = (percent / 100.0);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -452,6 +472,257 @@ class _SkillStrengths extends StatelessWidget {
             }).toList(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RecommendedCareers extends StatefulWidget {
+  const _RecommendedCareers({
+    required this.careers,
+    required this.subploScores,
+  });
+  final List<Map<String, dynamic>> careers;
+  final Map<String, dynamic> subploScores;
+
+  @override
+  State<_RecommendedCareers> createState() => _RecommendedCareersState();
+}
+
+class _RecommendedCareersState extends State<_RecommendedCareers> {
+  late Future<Map<String, Map<String, dynamic>>> _detailFuture;
+  final Set<String> _expanded = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _detailFuture = _loadCareerDetails();
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadCareerDetails() async {
+    final Map<String, Map<String, dynamic>> result = {};
+    final futures = widget.careers.map((career) async {
+      final careerId = (career['career_id'] ?? career['id'] ?? '').toString();
+      if (careerId.isEmpty) return;
+      final snap = await FirebaseFirestore.instance
+          .collection('career')
+          .doc(careerId)
+          .get();
+      if (!snap.exists) return;
+      result[careerId] = snap.data() ?? {};
+    });
+    await Future.wait(futures);
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.careers.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('No recommended careers available',
+            style: TextStyle(color: Colors.black54)),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: FutureBuilder<Map<String, Map<String, dynamic>>>(
+        future: _detailFuture,
+        builder: (context, snapshot) {
+          final details = snapshot.data ?? {};
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Recommended careers',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              ...widget.careers.map((career) {
+                final id = (career['career_id'] ?? career['id'] ?? '').toString();
+                final name = career['enname'] ?? 'Unknown Career';
+                final thname = career['thname'] ?? '';
+                final percent = (_asDouble(career['percent']) * 1).round();
+                final detail = details[id] ?? {};
+
+                final coreIds =
+                    List<String>.from(detail['core_subplo_id'] ?? const []);
+                final supportIds =
+                    List<String>.from(detail['support_subplo_id'] ?? const []);
+
+                final coreSkills = _buildSkillList(coreIds);
+                final supportSkills = _buildSkillList(supportIds);
+
+                final isExpanded = _expanded.contains(id);
+
+                return Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.black.withOpacity(0.05)),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        onTap: () {
+                          setState(() {
+                            if (isExpanded) {
+                              _expanded.remove(id);
+                            } else {
+                              _expanded.add(id);
+                            }
+                          });
+                        },
+                        leading: const Icon(Icons.work_outline,
+                            color: _primary),
+                        title: Text(name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(thname),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: _primary, width: 1),
+                              ),
+                              child: Text(
+                                "$percent%",
+                                style: const TextStyle(
+                                  color: _primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isExpanded
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              color: Colors.black54,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isExpanded) ...[
+                        const Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (coreSkills.isNotEmpty) ...[
+                                const Text(
+                                  'Core skills',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14),
+                                ),
+                                const SizedBox(height: 8),
+                                ...coreSkills
+                                    .map((s) => _SkillLine(
+                                          label: s.title,
+                                          percent: s.percent,
+                                        ))
+                                    .toList(),
+                                const SizedBox(height: 12),
+                              ],
+                              if (supportSkills.isNotEmpty) ...[
+                                const Text(
+                                  'Support skills',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14),
+                                ),
+                                const SizedBox(height: 8),
+                                ...supportSkills
+                                    .map((s) => _SkillLine(
+                                          label: s.title,
+                                          percent: s.percent,
+                                        ))
+                                    .toList(),
+                              ],
+                              if (coreSkills.isEmpty && supportSkills.isEmpty)
+                                const Text(
+                                  'No skill details available',
+                                  style: TextStyle(
+                                      color: Colors.black54, fontSize: 13),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<_SkillEntry> _buildSkillList(List<String> ids) {
+    final List<_SkillEntry> items = [];
+    for (final id in ids) {
+      final dynamic raw = widget.subploScores[id];
+      if (raw is Map && raw.containsKey('score')) {
+        final double score = _asDouble(raw['score']);
+        final String title = (raw['description'] as String?) ?? id;
+        final int percent = ((score / 4.0) * 100).clamp(0, 100).round();
+        items.add(_SkillEntry(title: title, percent: percent));
+      }
+    }
+    items.sort((a, b) => b.percent.compareTo(a.percent));
+    return items;
+  }
+
+  double _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+}
+
+class _SkillEntry {
+  _SkillEntry({required this.title, required this.percent});
+  final String title;
+  final int percent;
+}
+
+class _SkillLine extends StatelessWidget {
+  const _SkillLine({required this.label, required this.percent});
+  final String label;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13.5, color: Colors.black87),
+            ),
+          ),
+          Text(
+            '$percent%',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+            ),
+          ),
+        ],
       ),
     );
   }

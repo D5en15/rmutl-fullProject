@@ -1,13 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserEditFormPage extends StatefulWidget {
-  const UserEditFormPage({
-    super.key,
-    required this.userId,
-    required this.email,
-  });
+  const UserEditFormPage({super.key, required this.userId, required this.email});
 
   final String userId;
   final String email;
@@ -20,18 +16,25 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
   static const _primary = Color(0xFF3D5CFF);
   final _form = GlobalKey<FormState>();
 
-  final _userName = TextEditingController();
+  final _userIdCtrl = TextEditingController();
   final _fullName = TextEditingController();
   final _email = TextEditingController();
-  final _className = TextEditingController();
   String _role = 'Student';
-  String? _selectedAvatar;
+  String? _avatarUrl;
 
   @override
   void initState() {
     super.initState();
     _email.text = widget.email;
     _loadUser();
+  }
+
+  @override
+  void dispose() {
+    _userIdCtrl.dispose();
+    _fullName.dispose();
+    _email.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUser() async {
@@ -44,46 +47,49 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
-          _userName.text = data['user_name'] ?? '';
-          _fullName.text = data['user_fullname'] ?? '';
-          _className.text = data['user_class'] ?? '';
-          _role = data['user_role'] ?? 'Student';
-          _selectedAvatar = data['user_img'] ?? '';
+          _userIdCtrl.text = (data['user_id'] ?? '').toString();
+          _fullName.text = (data['user_fullname'] ?? '').toString();
+          if ((data['user_email'] ?? '').toString().isNotEmpty) {
+            _email.text = (data['user_email'] ?? '').toString();
+          }
+          _role = (data['user_role'] ?? 'Student').toString();
+          _avatarUrl = (data['user_img'] ?? '').toString();
         });
       }
     } catch (e) {
-      debugPrint("Error loading user: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("เกิดข้อผิดพลาดในการโหลดข้อมูล: $e")),
-      );
+      debugPrint('Error loading user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load user: $e')),
+        );
+      }
     }
   }
 
   Future<void> _submit() async {
     if (!(_form.currentState?.validate() ?? false)) return;
-
     try {
       await FirebaseFirestore.instance
           .collection('user')
           .doc(widget.userId)
           .update({
-        'user_name': _userName.text.trim(),
+        'user_id': _userIdCtrl.text.trim(),
         'user_fullname': _fullName.text.trim(),
-        'user_class': _className.text.trim(),
+        'user_email': _email.text.trim(),
         'user_role': _role,
-        'user_img': _selectedAvatar ?? '',
+        'user_img': _avatarUrl ?? '',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ ✅')),
+          const SnackBar(content: Text('User updated successfully')),
         );
         context.pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+          SnackBar(content: Text('Update failed: $e')),
         );
       }
     }
@@ -93,13 +99,13 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('ลบผู้ใช้งาน'),
-        content: const Text('คุณต้องการลบผู้ใช้งานคนนี้หรือไม่?'),
+        title: const Text('Delete user'),
+        content: const Text('This action cannot be undone. Delete this user?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('ยกเลิก')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('ลบ', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -115,14 +121,16 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ลบผู้ใช้งานเรียบร้อย ✅')),
+          const SnackBar(content: Text('User deleted')),
         );
         context.pop();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ลบไม่สำเร็จ: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Delete failed: $e')),
+        );
+      }
     }
   }
 
@@ -130,7 +138,7 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
     final chosen = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('เลือก Avatar'),
+        title: const Text('Select avatar'),
         content: SizedBox(
           width: double.maxFinite,
           height: 300,
@@ -157,16 +165,15 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
     );
 
     if (chosen != null) {
-      setState(() => _selectedAvatar = chosen);
+      setState(() => _avatarUrl = chosen);
     }
   }
 
-  InputDecoration _decoration(String label,
-      {bool readOnly = false, Color? fillColor}) {
+  InputDecoration _decoration(String label, {bool readOnly = false}) {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: fillColor ?? Colors.white,
+      fillColor: readOnly ? Colors.grey.shade200 : Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -183,165 +190,124 @@ class _UserEditFormPageState extends State<UserEditFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    const double headerH = 180;
-    const double avatarR = 44;
-
     return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Edit user',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: _confirmAndDelete,
+            tooltip: 'Delete user',
+          ),
+        ],
+      ),
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          children: [
-            Column(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Form(
+            key: _form,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // 🔹 Blue Header
-                Container(
-                  height: headerH,
-                  width: double.infinity,
-                  color: _primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                Center(
                   child: Stack(
                     children: [
-                      Align(
-                        alignment: Alignment.topLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                          onPressed: () => context.pop(),
-                        ),
+                      CircleAvatar(
+                        radius: 44,
+                        backgroundColor: const Color(0xFFE9ECFF),
+                        backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                            ? (_avatarUrl!.startsWith('http')
+                                ? NetworkImage(_avatarUrl!)
+                                : AssetImage('assets/avatars/$_avatarUrl'))
+                            : null as ImageProvider?,
+                        child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                            ? const Icon(Icons.person,
+                                size: 36, color: Color(0xFF4B5563))
+                            : null,
                       ),
-                      Align(
-                        alignment: Alignment.topRight,
-                        child: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.white),
-                          onPressed: _confirmAndDelete,
-                          tooltip: 'ลบผู้ใช้งาน',
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: InkWell(
+                          onTap: _pickAvatar,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.edit, size: 18, color: _primary),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 18),
 
-                // 🔹 Form Body
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(16, avatarR + 24, 16, 24),
-                    child: Form(
-                      key: _form,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFormField(
-                            controller: _userName,
-                            decoration: _decoration("ชื่อบัญชีผู้ใช้ (Username)"),
-                            validator: (v) =>
-                                v == null || v.isEmpty ? "จำเป็นต้องกรอก" : null,
-                          ),
-                          const SizedBox(height: 14),
+                TextFormField(
+                  controller: _userIdCtrl,
+                  decoration: _decoration('ID'),
+                  validator: (v) => v == null || v.isEmpty ? 'ID is required' : null,
+                ),
+                const SizedBox(height: 14),
 
-                          TextFormField(
-                            controller: _fullName,
-                            decoration: _decoration("ชื่อ-นามสกุล"),
-                            validator: (v) =>
-                                v == null || v.isEmpty ? "จำเป็นต้องกรอก" : null,
-                          ),
-                          const SizedBox(height: 14),
+                TextFormField(
+                  controller: _fullName,
+                  decoration: _decoration('Full name'),
+                  validator: (v) => v == null || v.isEmpty ? 'Full name is required' : null,
+                ),
+                const SizedBox(height: 14),
 
-                          TextFormField(
-                            controller: _email,
-                            readOnly: true,
-                            decoration: _decoration(
-                              "อีเมล (Email)",
-                              readOnly: true,
-                              fillColor: Colors.grey.shade200,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
+                TextFormField(
+                  controller: _email,
+                  readOnly: true,
+                  decoration: _decoration('Email', readOnly: true),
+                ),
+                const SizedBox(height: 14),
 
-                          TextFormField(
-                            controller: _className,
-                            decoration: _decoration("ห้องเรียน (Class)"),
-                          ),
-                          const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: _role,
+                  decoration: _decoration('User role'),
+                  items: const [
+                    DropdownMenuItem(value: 'Student', child: Text('Student')),
+                    DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
+                    DropdownMenuItem(value: 'Admin', child: Text('Admin')),
+                  ],
+                  onChanged: (v) => setState(() => _role = v ?? _role),
+                ),
+                const SizedBox(height: 20),
 
-                          DropdownButtonFormField<String>(
-                            value: _role,
-                            decoration: _decoration("บทบาทผู้ใช้ (Role)"),
-                            items: const [
-                              DropdownMenuItem(value: 'Student', child: Text('Student')),
-                              DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
-                              DropdownMenuItem(value: 'Admin', child: Text('Admin')),
-                            ],
-                            onChanged: (v) => setState(() => _role = v ?? _role),
-                          ),
-                          const SizedBox(height: 20),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _primary,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text("บันทึกข้อมูล"),
-                            ),
-                          ),
-                        ],
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
+                    child: const Text('Save changes'),
                   ),
                 ),
               ],
             ),
-
-            // 🔹 Avatar + ปุ่มเปลี่ยน
-            Positioned(
-              top: headerH - avatarR,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: avatarR,
-                      backgroundImage: _selectedAvatar != null &&
-                              _selectedAvatar!.isNotEmpty
-                          ? (_selectedAvatar!.startsWith('http')
-                              ? NetworkImage(_selectedAvatar!)
-                              : AssetImage('assets/avatars/$_selectedAvatar'))
-                          : null as ImageProvider?,
-                      backgroundColor: const Color(0xFFE9ECFF),
-                      child: (_selectedAvatar == null ||
-                              _selectedAvatar!.isEmpty)
-                          ? const Icon(Icons.person,
-                              size: 34, color: Color(0xFF4B5563))
-                          : null,
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: InkWell(
-                        onTap: _pickAvatar,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                          child:
-                              const Icon(Icons.edit, size: 18, color: _primary),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
