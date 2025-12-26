@@ -32,7 +32,6 @@ import 'ui/student/edit_subject_page.dart';
 import 'ui/teacher/teacher_home_page.dart' as t;
 import 'ui/teacher/student_list_page.dart';
 import 'ui/teacher/student_detail_page.dart';
-import 'ui/teacher/feedback_page.dart';
 
 // ---------- ADMIN ----------
 import 'ui/admin/admin_home_page.dart' as a;
@@ -188,7 +187,6 @@ class AppRouter {
                 builder: (_, s) =>
                     StudentDetailPage(studentId: s.pathParameters['id']!),
               ),
-              GoRoute(path: 'feedback', builder: (_, __) => const FeedbackPage()),
             ],
           ),
           GoRoute(
