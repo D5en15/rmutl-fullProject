@@ -21,9 +21,6 @@ import 'models/edit_profile_initial.dart';
 
 // ---------- STUDENT ----------
 import 'ui/student/student_home_page.dart' as s;
-import 'ui/student/grades_page.dart';
-import 'ui/student/edit_grade_page.dart';
-import 'ui/student/career_page.dart';
 import 'ui/student/subjects_page.dart';
 import 'ui/student/add_subject_page.dart';
 import 'ui/student/edit_subject_page.dart';
@@ -48,18 +45,17 @@ import 'ui/admin/subject/subject_edit_page.dart';
 import 'ui/admin/subplo/subplo_manage_page.dart';
 import 'ui/admin/subplo/subplo_add_page.dart';
 import 'ui/admin/subplo/subplo_edit_page.dart';
+import 'ui/admin/career/career_manage_page.dart';
+import 'ui/admin/career/career_add_page.dart';
+import 'ui/admin/career/career_edit_page.dart';
+import 'ui/admin/career/career_mapping_page.dart';
 // PLO
 import 'ui/admin/plo/plo_manage_page.dart';
 import 'ui/admin/plo/plo_add_page.dart';
 import 'ui/admin/plo/plo_edit_page.dart';
-// Careers
-import 'ui/admin/career/career_manage_page.dart';
-import 'ui/admin/career/career_add_page.dart';
-import 'ui/admin/career/career_edit_page.dart';
 // Mapping ✅
 import 'ui/admin/subject/subject_subplo_mapping_page.dart';
 import 'ui/admin/plo/plo_subplo_mapping_page.dart';
-import 'ui/admin/career/career_mapping_page.dart';
 
 // ---------- FORUM (shared) ----------
 import 'ui/forum/forum_list_page.dart';
@@ -132,9 +128,6 @@ class AppRouter {
             path: '/student',
             builder: (_, __) => const s.StudentHomePage(),
             routes: [
-              GoRoute(path: 'grades', builder: (_, __) => const GradesPage()),
-              GoRoute(path: 'grades/edit', builder: (_, __) => const EditGradePage()),
-              GoRoute(path: 'career', builder: (_, __) => const CareerPage()),
             ],
           ),
           GoRoute(
@@ -231,9 +224,14 @@ class AppRouter {
                       s.pathParameters['id']!,
                 ),
               ),
+
               // CONFIG dashboard
-              GoRoute(path: 'career-config', builder: (_, __) => const DashboardConfigPage()),
-              GoRoute(path: 'config', builder: (_, __) => const DashboardConfigPage()),
+              GoRoute(
+                  path: 'career-config',
+                  builder: (_, __) => const DashboardConfigPage()),
+              GoRoute(
+                  path: 'config',
+                  builder: (_, __) => const DashboardConfigPage()),
 
               // SUBJECTS management
               GoRoute(
@@ -287,8 +285,7 @@ class AppRouter {
                     CareerEditPage(careerId: s.pathParameters['id']!),
               ),
 
-
-              // ✅ Mapping pages
+              // Mapping pages
               GoRoute(
                   path: 'config/subject-subplo-mapping',
                   builder: (_, __) => const SubjectSubPLOMappingPage()),
@@ -299,7 +296,7 @@ class AppRouter {
                   path: 'config/mappings',
                   builder: (_, __) => const CareerMappingPage()),
 
-              // ✅ Admin forum
+              // Admin forum
               GoRoute(
                 path: 'forum',
                 builder: (_, __) => const ForumListPage(),
@@ -318,7 +315,7 @@ class AppRouter {
                 ],
               ),
 
-              // ✅ Admin settings
+              // Admin settings
               GoRoute(
                 path: 'settings',
                 builder: (_, __) => const SettingsPage(),
@@ -327,7 +324,6 @@ class AppRouter {
           ),
         ],
       ),
-
       // ---------- Global forum ----------
       GoRoute(
         path: '/forum',
