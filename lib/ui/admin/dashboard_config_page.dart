@@ -2,17 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 class DashboardConfigPage extends StatelessWidget {
   const DashboardConfigPage({super.key});
-
   // Theme token
   static const _primary = Color(0xFF3D5CFF);
   static const _muted = Color(0xFF858597);
   static const _soft = Color(0xFFF6F7FF);
   static const _border = Color(0xFFEFF1F7);
   static const _shadow = Color(0x0D000000);
-
   Future<int> _countDocs(String collection) async {
     try {
       final snap = await FirebaseFirestore.instance.collection(collection).get();
@@ -22,7 +19,6 @@ class DashboardConfigPage extends StatelessWidget {
       return 0;
     }
   }
-
   Future<Map<String, int>> _countSubjectMappings() async {
     try {
       final snap = await FirebaseFirestore.instance.collection("subject").get();
@@ -36,7 +32,6 @@ class DashboardConfigPage extends StatelessWidget {
       return {"mapped": 0, "total": 0};
     }
   }
-
   Future<Map<String, int>> _countPloMappings() async {
     try {
       final snap = await FirebaseFirestore.instance.collection("plo").get();
@@ -50,7 +45,6 @@ class DashboardConfigPage extends StatelessWidget {
       return {"mapped": 0, "total": 0};
     }
   }
-
   Widget _tile({
     required IconData icon,
     required String title,
@@ -100,7 +94,6 @@ class DashboardConfigPage extends StatelessWidget {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,7 +115,6 @@ class DashboardConfigPage extends StatelessWidget {
             _countDocs('plo'),
             _countDocs('career'),
             _countDocs('career_mapping'),
-            _countDocs('classroom'), // ✅ เพิ่ม collection ห้องเรียน
             _countSubjectMappings(),
             _countPloMappings(),
           ]),
@@ -133,22 +125,18 @@ class DashboardConfigPage extends StatelessWidget {
             if (!snapshot.hasData) {
               return const Center(child: Text("No data"));
             }
-
             final results = snapshot.data as List<dynamic>;
             final subjectsCount = results[0] as int;
             final subploCount = results[1] as int;
             final ploCount = results[2] as int;
             final careersCount = results[3] as int;
             final mappingCount = results[4] as int;
-            final classroomCount = results[5] as int; // ✅ ห้องเรียนทั้งหมด
-            final subjectMapping = results[6] as Map<String, int>;
-            final ploMapping = results[7] as Map<String, int>;
-
+                        final subjectMapping = results[5] as Map<String, int>;
+            final ploMapping = results[6] as Map<String, int>;
             final subjectMapped = subjectMapping["mapped"]!;
             final subjectTotal = subjectMapping["total"]!;
             final ploMapped = ploMapping["mapped"]!;
             final ploTotal = ploMapping["total"]!;
-
             return SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,19 +177,6 @@ class DashboardConfigPage extends StatelessWidget {
                     onManage: () =>
                         context.go('/admin/config/plo-subplo-mapping'),
                   ),
-
-                  const SizedBox(height: 16),
-                  const Text("🏫 Classrooms",
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 6),
-                  _tile(
-                    icon: Icons.meeting_room_outlined,
-                    title: 'Classrooms',
-                    subtitle: "$classroomCount rooms",
-                    onManage: () => context.go('/admin/config/classrooms'),
-                  ),
-
                   const SizedBox(height: 16),
                   const Text("👨‍💻 Careers",
                       style:
@@ -228,3 +203,4 @@ class DashboardConfigPage extends StatelessWidget {
     );
   }
 }
+

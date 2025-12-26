@@ -36,35 +36,31 @@ import 'ui/teacher/feedback_page.dart';
 
 // ---------- ADMIN ----------
 import 'ui/admin/admin_home_page.dart' as a;
-import 'ui/admin/user_manage_page.dart';
-import 'ui/admin/user_edit_form_page.dart';
-import 'ui/admin/user_add_page.dart';
-import 'ui/admin/role_permission_page.dart';
-import 'ui/admin/moderation_page.dart';
+import 'ui/admin/user/user_manage_page.dart';
+import 'ui/admin/user/user_edit_form_page.dart';
+import 'ui/admin/user/user_add_page.dart';
 
 // ---------- ADMIN CONFIG ----------
 import 'ui/admin/dashboard_config_page.dart';
-import 'ui/admin/subjects_manage_page.dart';
-import 'ui/admin/subject_add_page.dart';
-import 'ui/admin/subject_edit_page.dart';
+import 'ui/admin/subject/subject_manage_page.dart';
+import 'ui/admin/subject/subject_add_page.dart';
+import 'ui/admin/subject/subject_edit_page.dart';
 // SubPLO
-import 'ui/admin/subplo_manage_page.dart';
-import 'ui/admin/subplo_add_page.dart';
-import 'ui/admin/subplo_edit_page.dart';
+import 'ui/admin/subplo/subplo_manage_page.dart';
+import 'ui/admin/subplo/subplo_add_page.dart';
+import 'ui/admin/subplo/subplo_edit_page.dart';
 // PLO
-import 'ui/admin/plo_manage_page.dart';
-import 'ui/admin/plo_add_page.dart';
-import 'ui/admin/plo_edit_page.dart';
+import 'ui/admin/plo/plo_manage_page.dart';
+import 'ui/admin/plo/plo_add_page.dart';
+import 'ui/admin/plo/plo_edit_page.dart';
 // Careers
-import 'ui/admin/career_manage_page.dart';
-import 'ui/admin/career_add_page.dart';
-import 'ui/admin/career_edit_page.dart';
+import 'ui/admin/career/career_manage_page.dart';
+import 'ui/admin/career/career_add_page.dart';
+import 'ui/admin/career/career_edit_page.dart';
 // Mapping ✅
-import 'ui/admin/subject_subplo_mapping_page.dart';
-import 'ui/admin/plo_subplo_mapping_page.dart';
-import 'ui/admin/career_mapping_page.dart';
-// ✅ Classrooms (new)
-import 'ui/admin/classrooms_manage_page.dart';
+import 'ui/admin/subject/subject_subplo_mapping_page.dart';
+import 'ui/admin/plo/plo_subplo_mapping_page.dart';
+import 'ui/admin/career/career_mapping_page.dart';
 
 // ---------- FORUM (shared) ----------
 import 'ui/forum/forum_list_page.dart';
@@ -237,9 +233,6 @@ class AppRouter {
                       s.pathParameters['id']!,
                 ),
               ),
-              GoRoute(path: 'roles', builder: (_, __) => const RolePermissionPage()),
-              GoRoute(path: 'moderation', builder: (_, __) => const ModerationPage()),
-
               // CONFIG dashboard
               GoRoute(path: 'career-config', builder: (_, __) => const DashboardConfigPage()),
               GoRoute(path: 'config', builder: (_, __) => const DashboardConfigPage()),
@@ -296,11 +289,6 @@ class AppRouter {
                     CareerEditPage(careerId: s.pathParameters['id']!),
               ),
 
-              // ✅ Classrooms management (NEW)
-              GoRoute(
-                path: 'config/classrooms',
-                builder: (_, __) => const ClassroomsManagePage(),
-              ),
 
               // ✅ Mapping pages
               GoRoute(
